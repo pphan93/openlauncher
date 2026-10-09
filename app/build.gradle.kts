@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+
 android {
     namespace  = "com.openlauncher.app"
     compileSdk {
@@ -13,8 +15,19 @@ android {
         applicationId  = "com.openlauncher.app"
         minSdk         = 21
         targetSdk      = 36
-        versionCode    = 6
-        versionName    = "0.0.5"
+        versionCode    = 7
+        versionName    = "0.0.6"
+    }
+
+    signingConfigs {
+        if (!releaseKeystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+            }
+        }
     }
 
     buildTypes {
@@ -23,6 +36,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (!releaseKeystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -37,6 +53,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

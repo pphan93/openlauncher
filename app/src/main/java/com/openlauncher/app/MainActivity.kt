@@ -73,9 +73,11 @@ class MainActivity : ComponentActivity() {
             val isData      by vm.isData.collectAsStateWithLifecycle()
             val isDayModeVM by vm.isDayMode.collectAsStateWithLifecycle()
             val hardwareRadio by vm.hardwareRadio.collectAsStateWithLifecycle()
+            val updateStatus by vm.updateStatus.collectAsStateWithLifecycle()
             val systemIsDark = isSystemInDarkTheme()
             val isDayMode = if (settings.dayNightMode == DayNightMode.SYSTEM) !systemIsDark else isDayModeVM
             val pickerSlot      by vm.shortcutPickerSlot.collectAsStateWithLifecycle()
+            val iconPickerSlot  by vm.shortcutIconPickerSlot.collectAsStateWithLifecycle()
             val appPickerTarget by vm.appPickerTarget.collectAsStateWithLifecycle()
 
             val accent         = Color(settings.accentColor)
@@ -145,7 +147,9 @@ class MainActivity : ComponentActivity() {
 
                         val sidebarContent: @Composable () -> Unit = {
                             val sidebarDensity = Density(
-                                density = baseDensity.density * (1.0f + (settings.uiScale - 1.0f) * 0.35f),
+                                density = baseDensity.density *
+                                    (1.0f + (settings.uiScale - 1.0f) * 0.35f) *
+                                    settings.sidebarScale,
                                 fontScale = baseDensity.fontScale
                             )
                             CompositionLocalProvider(LocalDensity provides sidebarDensity) {
@@ -171,6 +175,8 @@ class MainActivity : ComponentActivity() {
                                     onShortcutLongPress  = { slot -> vm.startShortcutPicker(slot) },
                                     onShortcutRemove     = { slot -> vm.removeShortcut(slot) },
                                     onShortcutSetIcon    = { slot, icon -> vm.setShortcutIcon(slot, icon) },
+                                    requestedIconPickerSlot = iconPickerSlot,
+                                    onIconPickerDismiss  = { vm.cancelShortcutIconPicker() },
                                     onReorder            = { from, to -> vm.reorderShortcut(from, to) }
                                 )
                             }
@@ -251,10 +257,13 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     NavDestination.SETTINGS -> SettingsScreen(
-                                        settings = settings,
-                                        accent   = accent,
-                                        onUpdate = { block -> vm.updateSettings(block) },
-                                        onReset  = { vm.resetSettings() }
+                                        settings        = settings,
+                                        accent          = accent,
+                                        updateStatus    = updateStatus,
+                                        onCheckUpdates  = { vm.checkForUpdates() },
+                                        onResumeInstall = { vm.resumePendingUpdateInstall() },
+                                        onUpdate        = { block -> vm.updateSettings(block) },
+                                        onReset         = { vm.resetSettings() }
                                     )
                                 }
                             }
@@ -294,6 +303,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        vm.resumeUpdateAfterPermission()
         vm.refreshConnectivity()
         vm.refreshMedia()
     }

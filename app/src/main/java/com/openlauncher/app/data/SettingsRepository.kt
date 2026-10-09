@@ -44,6 +44,7 @@ class SettingsRepository(private val context: Context) {
         val WALLPAPER_DIM         = floatPreferencesKey("wallpaper_dim")
         val RIGHT_HAND_DRIVE      = booleanPreferencesKey("right_hand_drive") // kept for migration
         val SIDEBAR_POSITION           = stringPreferencesKey("sidebar_position")
+        val SIDEBAR_SCALE              = floatPreferencesKey("sidebar_scale")
         val BOTTOM_BAR_SHORTCUTS_RIGHT = booleanPreferencesKey("bottom_bar_shortcuts_right")
         val DAY_NIGHT_MODE        = stringPreferencesKey("day_night_mode")
         val SHOW_PIP              = booleanPreferencesKey("show_pip")
@@ -116,6 +117,7 @@ class SettingsRepository(private val context: Context) {
                 wallpaperDim     = prefs[Keys.WALLPAPER_DIM]       ?: defaults.wallpaperDim,
                 sidebarPosition  = prefs[Keys.SIDEBAR_POSITION]?.let { runCatching { SidebarPosition.valueOf(it) }.getOrNull() }
                                    ?: if (prefs[Keys.RIGHT_HAND_DRIVE] == true) SidebarPosition.RIGHT else defaults.sidebarPosition,
+                sidebarScale     = (prefs[Keys.SIDEBAR_SCALE] ?: defaults.sidebarScale).coerceIn(1.0f, 1.5f),
                 bottomBarShortcutsRight = prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] ?: defaults.bottomBarShortcutsRight,
                 dayNightMode     = prefs[Keys.DAY_NIGHT_MODE]?.let { runCatching { DayNightMode.valueOf(it) }.getOrNull() } ?: defaults.dayNightMode,
                 showPip          = prefs[Keys.SHOW_PIP]         ?: defaults.showPip,
@@ -176,6 +178,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.GRADIENT_END_COLOR] = s.gradientEndColor
             prefs[Keys.WALLPAPER_DIM]      = s.wallpaperDim
             prefs[Keys.SIDEBAR_POSITION]           = s.sidebarPosition.name
+            prefs[Keys.SIDEBAR_SCALE]              = s.sidebarScale
             prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] = s.bottomBarShortcutsRight
             prefs[Keys.DAY_NIGHT_MODE]     = s.dayNightMode.name
             prefs[Keys.SHOW_PIP]           = s.showPip

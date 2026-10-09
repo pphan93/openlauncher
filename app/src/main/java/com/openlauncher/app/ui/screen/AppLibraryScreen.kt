@@ -30,7 +30,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.openlauncher.app.model.AppInfo
 import com.openlauncher.app.ui.theme.LocalDayMode
 
-private enum class AppFilter { USER, SYSTEM, ALL }
+private enum class AppTab { ESSENTIALS, ALL }
 
 private val TILE_RADIUS = RoundedCornerShape(4.dp)
 
@@ -58,19 +58,14 @@ fun AppLibraryScreen(
     val fieldBorderU  = if (isDayMode) Color(0xFFCCCCCC) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
 
     val anyPickerMode = isPickerMode || isCarPlayPickerMode
-    var query     by remember { mutableStateOf("") }
-    var appFilter by remember { mutableStateOf(AppFilter.USER) }
+    var query  by remember { mutableStateOf("") }
+    var appTab by remember { mutableStateOf(AppTab.ESSENTIALS) }
 
-    val filtered = remember(apps, query, appFilter, anyPickerMode) {
-        val byName = if (query.isBlank()) apps
-                     else apps.filter { it.appName.contains(query, ignoreCase = true) }
-        // In picker mode always show everything so shortcuts can be set to any app
-        if (anyPickerMode) byName
-        else when (appFilter) {
-            AppFilter.USER   -> byName.filter { !it.isSystemApp }
-            AppFilter.SYSTEM -> byName.filter { it.isSystemApp }
-            AppFilter.ALL    -> byName
-        }
+    val filtered = remember(apps, query, appTab) {
+        apps.asSequence()
+            .filter { appTab == AppTab.ALL || it.isLaunchable }
+            .filter { query.isBlank() || it.appName.contains(query, ignoreCase = true) }
+            .toList()
     }
 
     Column(modifier = modifier.fillMaxSize().background(screenBg)) {
@@ -93,30 +88,24 @@ fun AppLibraryScreen(
                 letterSpacing = 3.sp,
                 fontSize      = 14.sp
             )
-            if (!anyPickerMode) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppFilter.entries.forEach { filter ->
-                        FilterChip(
-                            selected = appFilter == filter,
-                            onClick  = { appFilter = filter },
-                            label    = {
-                                Text(
-                                    when (filter) {
-                                        AppFilter.USER   -> "Installed"
-                                        AppFilter.SYSTEM -> "System"
-                                        AppFilter.ALL    -> "All"
-                                    },
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.5.sp
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent,
-                                selectedLabelColor     = Color.Black,
-                                labelColor             = placeholderC
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                AppTab.entries.forEach { tab ->
+                    FilterChip(
+                        selected = appTab == tab,
+                        onClick  = { appTab = tab },
+                        label    = {
+                            Text(
+                                if (tab == AppTab.ESSENTIALS) "Essentials" else "All",
+                                fontSize = 9.sp,
+                                letterSpacing = 0.5.sp
                             )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = accent,
+                            selectedLabelColor     = Color.Black,
+                            labelColor             = placeholderC
                         )
-                    }
+                    )
                 }
             }
             Spacer(Modifier.weight(1f))

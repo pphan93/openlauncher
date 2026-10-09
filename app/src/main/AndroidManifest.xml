@@ -28,6 +28,8 @@
 
     <!-- Query all packages required on API 30+ for getInstalledApplications -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Allows the user to approve installing an APK downloaded by the in-app updater. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Required on API 30+ so PackageManager returns ALL launcher apps -->
     <queries>

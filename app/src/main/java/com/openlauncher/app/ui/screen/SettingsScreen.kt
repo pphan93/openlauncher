@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openlauncher.app.data.AppFont
+import com.openlauncher.app.BuildConfig
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.SidebarPosition
@@ -38,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.openlauncher.app.ui.components.ColorPickerDialog
 import com.openlauncher.app.ui.components.ConfirmDialog
+import com.openlauncher.app.viewmodel.UpdateStatus
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
 
@@ -45,6 +47,9 @@ import com.openlauncher.app.ui.components.ConfirmDialog
 fun SettingsScreen(
     settings: AppSettings,
     accent: Color,
+    updateStatus: UpdateStatus,
+    onCheckUpdates: () -> Unit,
+    onResumeInstall: () -> Unit,
     onUpdate: (AppSettings.() -> AppSettings) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
@@ -55,6 +60,10 @@ fun SettingsScreen(
     var showBgPicker          by remember { mutableStateOf(false) }
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (updateStatus == UpdateStatus.Idle) onCheckUpdates()
+    }
 
     // OpenDocument (not GetContent): only SAF document URIs carry a persistable
     // grant, so this is what actually keeps the wallpaper readable after reboot
@@ -342,6 +351,24 @@ fun SettingsScreen(
 
         // ── Sidebar Shortcuts ─────────────────────────────────────────────────
         SettingsSection("Sidebar") {
+            Column {
+                SettingsRow(
+                    label    = "Sidebar Size",
+                    sublabel = "${"%.0f".format(settings.sidebarScale * 100)}% — enlarges the bar and app icons",
+                    icon     = Icons.Default.ZoomOutMap
+                ) {}
+                Slider(
+                    value         = settings.sidebarScale,
+                    onValueChange = { scale -> onUpdate { copy(sidebarScale = scale) } },
+                    valueRange    = 1.0f..1.5f,
+                    steps         = 4,
+                    colors        = sliderColors(accent),
+                    modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                )
+            }
+
+            SettingsDivider()
+
             settings.shortcuts.forEachIndexed { index, shortcut ->
                 if (index > 0) SettingsDivider()
                 SettingsRow(
@@ -748,13 +775,36 @@ fun SettingsScreen(
         // ── Updates ──────────────────────────────────────────────────────────
         SettingsSection("Updates") {
             SettingsButton(
-                label    = "Check for Updates",
-                sublabel = "View releases on GitHub",
+                label = when (updateStatus) {
+                    UpdateStatus.Checking -> "Checking for Updates"
+                    is UpdateStatus.Downloading -> "Downloading Update"
+                    is UpdateStatus.AwaitingInstallPermission -> "Allow Update Installation"
+                    is UpdateStatus.AwaitingInstallConfirmation -> "Install Update"
+                    else -> "Check for Updates"
+                },
+                sublabel = when (val status = updateStatus) {
+                    UpdateStatus.Idle -> "Check GitHub and install a newer APK automatically"
+                    UpdateStatus.Checking -> "Contacting GitHub…"
+                    is UpdateStatus.UpToDate -> "No new update — v${status.version} is current"
+                    is UpdateStatus.Downloading -> {
+                        val progress = status.progressPercent?.let { " — $it%" } ?: ""
+                        "Downloading v${status.version}$progress"
+                    }
+                    is UpdateStatus.AwaitingInstallPermission ->
+                        "Enable Allow from this source; installation continues when you return"
+                    is UpdateStatus.AwaitingInstallConfirmation ->
+                        "Downloaded v${status.version} — confirm installation in Android"
+                    is UpdateStatus.Error -> status.message
+                },
                 icon     = Icons.Default.SystemUpdate,
                 accent   = accent,
                 onClick  = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/dw2lam/openlauncher/releases"))
-                    context.startActivity(intent)
+                    when (updateStatus) {
+                        UpdateStatus.Checking, is UpdateStatus.Downloading -> Unit
+                        is UpdateStatus.AwaitingInstallPermission,
+                        is UpdateStatus.AwaitingInstallConfirmation -> onResumeInstall()
+                        else -> onCheckUpdates()
+                    }
                 }
             )
         }
@@ -778,7 +828,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text          = "v0.0.5  ·  Made by David Lam  ·  2026",
+            text          = "v${BuildConfig.VERSION_NAME}  ·  Open Launcher  ·  2026",
             color         = if (isDayMode) Color(0xFFAAAAAA) else Color(0xFF2A2A2A),
             fontSize      = 10.sp,
             letterSpacing = 1.sp,

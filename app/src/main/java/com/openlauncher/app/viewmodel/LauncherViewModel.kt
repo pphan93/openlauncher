@@ -13,6 +13,7 @@ import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openlauncher.app.data.AppSettings
+import com.openlauncher.app.data.AppUpdateManager
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.DefaultShortcutIcon
 import com.openlauncher.app.data.GRID_COLS
@@ -38,7 +39,14 @@ import kotlinx.coroutines.flow.*
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepo = SettingsRepository(application)
+    private val updateManager = AppUpdateManager(application, viewModelScope)
     private val locationMgr  = LocationCompassManager(application)
+
+    val updateStatus: StateFlow<UpdateStatus> = updateManager.status
+
+    fun checkForUpdates() = updateManager.checkForUpdates()
+    fun resumePendingUpdateInstall() = updateManager.resumePendingInstall()
+    fun resumeUpdateAfterPermission() = updateManager.resumeAfterInstallPermission()
 
     // ── Settings ──────────────────────────────────────────────────────────────
     private val _settingsLoaded = MutableStateFlow(false)
@@ -66,6 +74,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _shortcutPickerSlot = MutableStateFlow<Int?>(null)
     val shortcutPickerSlot: StateFlow<Int?> = _shortcutPickerSlot
 
+    private val _shortcutIconPickerSlot = MutableStateFlow<Int?>(null)
+    val shortcutIconPickerSlot: StateFlow<Int?> = _shortcutIconPickerSlot
+
     fun startShortcutPicker(slot: Int) {
         _shortcutPickerSlot.value = slot
         _nav.value = NavDestination.APP_LIBRARY
@@ -79,6 +90,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             })
         }
         _shortcutPickerSlot.value = null
+        _shortcutIconPickerSlot.value = slot
         _nav.value = NavDestination.HOME
     }
 
@@ -107,6 +119,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 if (slot in list.indices) list[slot] = list[slot].copy(customIconOverride = icon)
             })
         }
+        _shortcutIconPickerSlot.value = null
+    }
+
+    fun cancelShortcutIconPicker() {
+        _shortcutIconPickerSlot.value = null
     }
 
     fun cancelShortcutPicker() {
@@ -325,7 +342,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                             packageName = appInfo.packageName,
                             appName     = label,
                             icon        = pm.getApplicationIcon(appInfo),
-                            isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                            isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0,
+                            isLaunchable = pm.getLaunchIntentForPackage(appInfo.packageName) != null ||
+                                pm.getLeanbackLaunchIntentForPackage(appInfo.packageName) != null
                         )
                     } catch (_: Exception) { null }
                 }

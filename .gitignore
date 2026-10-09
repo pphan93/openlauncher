@@ -26,6 +26,7 @@ keystore/
 .gradle/
 build/
 local.properties
+gradle/gradle-daemon-jvm.properties
 
 # OS generated
 .DS_Store

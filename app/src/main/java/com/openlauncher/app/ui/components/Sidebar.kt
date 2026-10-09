@@ -23,12 +23,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +41,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.DefaultShortcutIcon
+import com.openlauncher.app.data.ShortcutIconCategory
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.ui.theme.LocalDayMode
@@ -44,6 +49,37 @@ import kotlin.math.roundToInt
 
 private val ICON_SIZE   = 22.dp
 private val SLOT_SIZE   = 52.dp
+
+/** A theme-tintable CarPlay-style mark: an open circular ring around Play. */
+private val CarPlayIcon: ImageVector = ImageVector.Builder(
+    name = "CarPlay",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2.6f,
+        strokeLineCap = StrokeCap.Round
+    ) {
+        moveTo(19.2f, 6.7f)
+        curveTo(17.45f, 3.75f, 14.25f, 2.15f, 10.85f, 2.25f)
+        curveTo(5.55f, 2.4f, 1.4f, 6.75f, 1.55f, 12.05f)
+        curveTo(1.7f, 17.45f, 6.15f, 21.7f, 11.55f, 21.55f)
+        curveTo(14.9f, 21.45f, 18.0f, 19.7f, 19.65f, 16.85f)
+    }
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(8.7f, 7.45f)
+        curveTo(8.7f, 6.85f, 9.35f, 6.5f, 9.85f, 6.82f)
+        lineTo(16.3f, 10.92f)
+        curveTo(16.95f, 11.33f, 16.95f, 12.27f, 16.3f, 12.68f)
+        lineTo(9.85f, 16.78f)
+        curveTo(9.35f, 17.1f, 8.7f, 16.75f, 8.7f, 16.15f)
+        close()
+    }
+}.build()
 
 @Composable
 fun Sidebar(
@@ -55,6 +91,8 @@ fun Sidebar(
     onShortcutLongPress: (Int) -> Unit,
     onShortcutRemove: (Int) -> Unit,
     onShortcutSetIcon: (Int, DefaultShortcutIcon?) -> Unit,
+    requestedIconPickerSlot: Int? = null,
+    onIconPickerDismiss: () -> Unit = {},
     onReorder: (from: Int, to: Int) -> Unit,
     isHorizontal: Boolean = false,
     modifier: Modifier = Modifier
@@ -69,6 +107,10 @@ fun Sidebar(
 
     var actionSheetSlot by remember { mutableStateOf<Int?>(null) }
     var iconPickerSlot  by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(requestedIconPickerSlot) {
+        if (requestedIconPickerSlot != null) iconPickerSlot = requestedIconPickerSlot
+    }
 
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var dragOffsetPx  by remember { mutableFloatStateOf(0f) }
@@ -248,8 +290,12 @@ fun Sidebar(
             onPick  = { icon ->
                 iconPickerSlot = null
                 onShortcutSetIcon(slot, icon)
+                onIconPickerDismiss()
             },
-            onDismiss = { iconPickerSlot = null }
+            onDismiss = {
+                iconPickerSlot = null
+                onIconPickerDismiss()
+            }
         )
     }
 }
@@ -418,7 +464,11 @@ private fun IconPickerDialog(
     onPick: (DefaultShortcutIcon?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val vectorOptions = DefaultShortcutIcon.entries.filter { it != DefaultShortcutIcon.NONE }
+    var selectedCategory by remember { mutableStateOf<ShortcutIconCategory?>(null) }
+    val vectorOptions = DefaultShortcutIcon.entries.filter {
+        it != DefaultShortcutIcon.NONE &&
+            (selectedCategory == null || it.category == selectedCategory)
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -458,33 +508,97 @@ private fun IconPickerDialog(
                 HorizontalDivider(color = Color(0xFF1A1A1A), modifier = Modifier.padding(vertical = 6.dp))
             }
 
-            LazyVerticalGrid(
-                columns               = GridCells.Fixed(5),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement   = Arrangement.spacedBy(5.dp),
-                modifier              = Modifier.heightIn(max = 300.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(vectorOptions) { iconOption ->
+                IconCategoryChip(
+                    label = "All",
+                    selected = selectedCategory == null,
+                    accent = accent,
+                    onClick = { selectedCategory = null }
+                )
+                ShortcutIconCategory.entries.forEach { category ->
+                    IconCategoryChip(
+                        label = category.displayName,
+                        selected = selectedCategory == category,
+                        accent = accent,
+                        onClick = { selectedCategory = category }
+                    )
+                }
+            }
+
+            LazyVerticalGrid(
+                columns               = GridCells.Fixed(4),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement   = Arrangement.spacedBy(6.dp),
+                modifier              = Modifier
+                    .widthIn(min = 320.dp, max = 460.dp)
+                    .heightIn(max = 360.dp)
+            ) {
+                items(vectorOptions, key = { it.name }) { iconOption ->
                     val isSelected = currentOverride == iconOption
-                    Box(
-                        contentAlignment = Alignment.Center,
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                         modifier = Modifier
-                            .aspectRatio(1f)
+                            .height(62.dp)
+                            .fillMaxWidth()
                             .clip(RoundedCornerShape(4.dp))
                             .background(if (isSelected) accent.copy(alpha = 0.18f) else Color(0xFF1A1A1A))
+                            .border(
+                                width = 1.dp,
+                                color = if (isSelected) accent.copy(alpha = 0.45f) else Color.Transparent,
+                                shape = RoundedCornerShape(4.dp)
+                            )
                             .clickable { onPick(iconOption) }
+                            .padding(horizontal = 4.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector        = iconOption.toIcon(),
-                            contentDescription = iconOption.name,
+                            contentDescription = iconOption.displayName,
                             tint               = if (isSelected) accent else Color(0xFF888888),
                             modifier           = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            text = iconOption.displayName.uppercase(),
+                            color = if (isSelected) accent else Color(0xFF777777),
+                            fontSize = 7.sp,
+                            letterSpacing = 0.4.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun IconCategoryChip(
+    label: String,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Text(
+        text = label.uppercase(),
+        color = if (selected) accent else Color(0xFF777777),
+        fontSize = 8.sp,
+        letterSpacing = 0.7.sp,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (selected) accent.copy(alpha = 0.16f) else Color(0xFF1A1A1A))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    )
 }
 
 @Composable
@@ -520,39 +634,81 @@ private fun NavButton(
 }
 
 fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
-    // Navigation & vehicle
-    DefaultShortcutIcon.RADIO       -> Icons.Default.Radio
-    DefaultShortcutIcon.CAMERA      -> Icons.Default.CameraAlt
-    DefaultShortcutIcon.PHONE       -> Icons.Default.Phone
+    // Vehicle
+    DefaultShortcutIcon.CAR         -> Icons.Default.DirectionsCar
+    DefaultShortcutIcon.CAR_PLAY    -> CarPlayIcon
+    DefaultShortcutIcon.ELECTRIC_CAR -> Icons.Default.ElectricCar
+    DefaultShortcutIcon.GAS_STATION -> Icons.Default.LocalGasStation
+    DefaultShortcutIcon.EV_STATION  -> Icons.Default.EvStation
+    DefaultShortcutIcon.CAR_REPAIR  -> Icons.Default.CarRepair
+    DefaultShortcutIcon.TIRE_REPAIR -> Icons.Default.TireRepair
+    DefaultShortcutIcon.PARKING     -> Icons.Default.LocalParking
+    DefaultShortcutIcon.TRAFFIC     -> Icons.Default.Traffic
+    DefaultShortcutIcon.MOTORCYCLE  -> Icons.Default.TwoWheeler
+    DefaultShortcutIcon.DASHBOARD   -> Icons.Default.Speed
+    // Navigation
     DefaultShortcutIcon.MAP         -> Icons.Default.Map
     DefaultShortcutIcon.NAVIGATION  -> Icons.Default.Navigation
-    DefaultShortcutIcon.CAR         -> Icons.Default.DirectionsCar
-    DefaultShortcutIcon.GAS_STATION -> Icons.Default.LocalGasStation
-    DefaultShortcutIcon.DASHBOARD   -> Icons.Default.Speed
+    DefaultShortcutIcon.COMPASS     -> Icons.Default.Explore
+    DefaultShortcutIcon.LOCATION    -> Icons.Default.Place
+    DefaultShortcutIcon.ROUTE       -> Icons.Default.Route
+    DefaultShortcutIcon.NEAR_ME     -> Icons.Default.NearMe
     // Audio & media
+    DefaultShortcutIcon.RADIO       -> Icons.Default.Radio
     DefaultShortcutIcon.MUSIC       -> Icons.Default.MusicNote
+    DefaultShortcutIcon.LIBRARY_MUSIC -> Icons.Default.LibraryMusic
+    DefaultShortcutIcon.PLAY        -> Icons.Default.PlayArrow
     DefaultShortcutIcon.SPEAKER     -> Icons.Default.Speaker
     DefaultShortcutIcon.HEADSET     -> Icons.Default.Headset
     DefaultShortcutIcon.EQUALIZER   -> Icons.Default.Equalizer
     DefaultShortcutIcon.VOLUME_UP   -> Icons.Default.VolumeUp
+    DefaultShortcutIcon.PODCAST     -> Icons.Default.Podcasts
+    DefaultShortcutIcon.MICROPHONE  -> Icons.Default.Mic
+    DefaultShortcutIcon.TV          -> Icons.Default.Tv
+    DefaultShortcutIcon.VIDEOCAM    -> Icons.Default.Videocam
+    // Communication
+    DefaultShortcutIcon.PHONE       -> Icons.Default.Phone
+    DefaultShortcutIcon.MESSAGE     -> Icons.Default.Message
+    DefaultShortcutIcon.CHAT        -> Icons.Default.Chat
+    DefaultShortcutIcon.EMAIL       -> Icons.Default.Email
+    DefaultShortcutIcon.CONTACTS    -> Icons.Default.Contacts
     // Connectivity
     DefaultShortcutIcon.BLUETOOTH   -> Icons.Default.Bluetooth
     DefaultShortcutIcon.WIFI        -> Icons.Default.Wifi
+    DefaultShortcutIcon.HOTSPOT     -> Icons.Default.WifiTethering
+    DefaultShortcutIcon.USB         -> Icons.Default.Usb
+    DefaultShortcutIcon.CAST        -> Icons.Default.Cast
+    DefaultShortcutIcon.CELLULAR    -> Icons.Default.SignalCellularAlt
     // Lighting & climate
     DefaultShortcutIcon.LIGHTBULB   -> Icons.Default.Lightbulb
     DefaultShortcutIcon.BRIGHTNESS  -> Icons.Default.BrightnessHigh
     DefaultShortcutIcon.AC          -> Icons.Default.AcUnit
+    DefaultShortcutIcon.FAN         -> Icons.Default.Air
     DefaultShortcutIcon.THERMOSTAT  -> Icons.Default.Thermostat
+    DefaultShortcutIcon.SUN         -> Icons.Default.WbSunny
+    DefaultShortcutIcon.NIGHT       -> Icons.Default.DarkMode
+    DefaultShortcutIcon.RAIN        -> Icons.Default.WaterDrop
     // General utility
-    DefaultShortcutIcon.TV          -> Icons.Default.Tv
-    DefaultShortcutIcon.VIDEOCAM    -> Icons.Default.Videocam
+    DefaultShortcutIcon.CAMERA      -> Icons.Default.CameraAlt
     DefaultShortcutIcon.STAR        -> Icons.Default.Star
-    DefaultShortcutIcon.MESSAGE     -> Icons.Default.Message
-    DefaultShortcutIcon.TIMER       -> Icons.Default.Timer
-    DefaultShortcutIcon.LOCK        -> Icons.Default.Lock
-    DefaultShortcutIcon.SETTINGS    -> Icons.Default.Settings
     DefaultShortcutIcon.FAVORITE    -> Icons.Default.Favorite
-    // Web / location
+    DefaultShortcutIcon.TIMER       -> Icons.Default.Timer
+    DefaultShortcutIcon.CLOCK       -> Icons.Default.Schedule
+    DefaultShortcutIcon.ALARM       -> Icons.Default.Alarm
+    DefaultShortcutIcon.CALENDAR    -> Icons.Default.CalendarMonth
+    DefaultShortcutIcon.CALCULATOR  -> Icons.Default.Calculate
+    DefaultShortcutIcon.SHOPPING    -> Icons.Default.ShoppingCart
+    DefaultShortcutIcon.FOOD        -> Icons.Default.Restaurant
+    DefaultShortcutIcon.COFFEE      -> Icons.Default.LocalCafe
+    DefaultShortcutIcon.HOME        -> Icons.Default.Home
+    DefaultShortcutIcon.WORK        -> Icons.Default.Work
+    DefaultShortcutIcon.SEARCH      -> Icons.Default.Search
+    DefaultShortcutIcon.NOTIFICATIONS -> Icons.Default.Notifications
+    DefaultShortcutIcon.LOCK        -> Icons.Default.Lock
+    DefaultShortcutIcon.SECURITY    -> Icons.Default.Security
+    DefaultShortcutIcon.SETTINGS    -> Icons.Default.Settings
+    DefaultShortcutIcon.POWER       -> Icons.Default.PowerSettingsNew
+    DefaultShortcutIcon.DOWNLOAD    -> Icons.Default.Download
     DefaultShortcutIcon.GLOBE       -> Icons.Default.Language
     DefaultShortcutIcon.NONE        -> Icons.Default.Apps
 }
