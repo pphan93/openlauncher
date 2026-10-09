@@ -9,6 +9,7 @@
 release/*.apk
 release/*.zip
 release/*.aab
+/app/release/
 
 # Signing keys — never commit
 *.jks
