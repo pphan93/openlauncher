@@ -16,6 +16,8 @@ import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.AppUpdateManager
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.DefaultShortcutIcon
+import com.openlauncher.app.data.EXTERNAL_WIDGET_PREFIX
+import com.openlauncher.app.data.ExternalWidgetConfig
 import com.openlauncher.app.data.GRID_COLS
 import com.openlauncher.app.data.GRID_ROWS
 import com.openlauncher.app.data.SettingsRepository
@@ -25,6 +27,7 @@ import com.openlauncher.app.data.WeatherApi
 import com.openlauncher.app.data.activeWidgetIds
 import com.openlauncher.app.data.computeWidgetMove
 import com.openlauncher.app.data.defaultShortcuts
+import com.openlauncher.app.data.externalWidgetLayoutId
 import com.openlauncher.app.util.SunriseSunset
 import com.openlauncher.app.model.AppInfo
 import com.openlauncher.app.model.NavDestination
@@ -257,8 +260,68 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun addExternalWidget(
+        widget: ExternalWidgetConfig,
+        preferredSpanX: Int,
+        preferredSpanY: Int
+    ) {
+        updateSettings {
+            val layoutId = externalWidgetLayoutId(widget.appWidgetId)
+            val activeIds = activeWidgetIds()
+            var layout = widgetLayout.filterNot { it.id == layoutId }
+
+            val wantedX = preferredSpanX.coerceIn(1, GRID_COLS)
+            val wantedY = preferredSpanY.coerceIn(1, GRID_ROWS)
+            var spanX = wantedX
+            var spanY = wantedY
+            var cell = freeAreaIn(layout, activeIds, spanX, spanY)
+
+            if (cell == null) {
+                spanX = 1
+                spanY = 1
+                cell = freeCellIn(layout, activeIds)
+            }
+
+            if (cell == null) {
+                val candidate = layout
+                    .filter { it.enabled && it.id in activeIds && it.spanX * it.spanY > 1 }
+                    .maxByOrNull { it.spanX * it.spanY }
+                if (candidate != null) {
+                    layout = layout.map { existing ->
+                        if (existing.id == candidate.id) {
+                            if (existing.spanY > 1) existing.copy(spanY = existing.spanY - 1)
+                            else existing.copy(spanX = existing.spanX - 1)
+                        } else existing
+                    }
+                    cell = freeCellIn(layout, activeIds)
+                }
+            }
+
+            val target = cell ?: return@updateSettings this
+            copy(
+                externalWidgets = externalWidgets.filterNot {
+                    it.appWidgetId == widget.appWidgetId
+                } + widget,
+                widgetLayout = layout + com.openlauncher.app.data.WidgetConfig(
+                    id = layoutId,
+                    gridX = target.first,
+                    gridY = target.second,
+                    spanX = spanX,
+                    spanY = spanY
+                )
+            )
+        }
+    }
+
     fun removeWidget(id: String) {
         updateSettings {
+            if (id.startsWith(EXTERNAL_WIDGET_PREFIX)) {
+                val appWidgetId = id.removePrefix(EXTERNAL_WIDGET_PREFIX).toIntOrNull()
+                return@updateSettings copy(
+                    externalWidgets = externalWidgets.filterNot { it.appWidgetId == appWidgetId },
+                    widgetLayout = widgetLayout.filterNot { it.id == id }
+                )
+            }
             when (id) {
                 "CLOCK"       -> copy(showClock = false)
                 "WEATHER"     -> copy(showWeather = false)

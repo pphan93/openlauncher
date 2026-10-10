@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
         val SHOW_SPEEDOMETER   = booleanPreferencesKey("show_speedometer")
         val SHORTCUTS_JSON     = stringPreferencesKey("shortcuts_json")
         val WIDGET_LAYOUT_JSON = stringPreferencesKey("widget_layout_json")
+        val EXTERNAL_WIDGETS_JSON = stringPreferencesKey("external_widgets_json")
         val CAR_PLAY_PACKAGE      = stringPreferencesKey("car_play_package")
         val ANDROID_AUTO_PACKAGE  = stringPreferencesKey("android_auto_package")
         val USE_GRADIENT          = booleanPreferencesKey("use_gradient")
@@ -93,6 +94,15 @@ class SettingsRepository(private val context: Context) {
                 if (loaded.none { it.gridX >= 2 }) defaults.widgetLayout else loaded
             } else defaults.widgetLayout
 
+            val externalWidgets = prefs[Keys.EXTERNAL_WIDGETS_JSON]?.let {
+                runCatching {
+                    gson.fromJson<List<ExternalWidgetConfig>>(
+                        it,
+                        object : TypeToken<List<ExternalWidgetConfig>>() {}.type
+                    )
+                }.getOrNull()
+            } ?: defaults.externalWidgets
+
             return AppSettings(
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
                 accentColor    = prefs[Keys.ACCENT_COLOR]     ?: defaults.accentColor,
@@ -113,6 +123,7 @@ class SettingsRepository(private val context: Context) {
                 showSpeedometer = prefs[Keys.SHOW_SPEEDOMETER] ?: defaults.showSpeedometer,
                 shortcuts      = shortcuts,
                 widgetLayout   = widgets,
+                externalWidgets = externalWidgets,
                 carPlayPackage      = prefs[Keys.CAR_PLAY_PACKAGE]      ?: defaults.carPlayPackage,
                 androidAutoPackage  = prefs[Keys.ANDROID_AUTO_PACKAGE]  ?: defaults.androidAutoPackage,
                 useGradient      = prefs[Keys.USE_GRADIENT]        ?: defaults.useGradient,
@@ -180,6 +191,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SHOW_SPEEDOMETER]   = s.showSpeedometer
             prefs[Keys.SHORTCUTS_JSON]     = gson.toJson(s.shortcuts)
             prefs[Keys.WIDGET_LAYOUT_JSON] = gson.toJson(s.widgetLayout)
+            prefs[Keys.EXTERNAL_WIDGETS_JSON] = gson.toJson(s.externalWidgets)
             prefs[Keys.CAR_PLAY_PACKAGE]      = s.carPlayPackage
             prefs[Keys.ANDROID_AUTO_PACKAGE]  = s.androidAutoPackage
             prefs[Keys.USE_GRADIENT]       = s.useGradient

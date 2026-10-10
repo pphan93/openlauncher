@@ -159,6 +159,17 @@ data class WidgetConfig(
     val enabled: Boolean = true
 )
 
+const val EXTERNAL_WIDGET_PREFIX = "ANDROID_WIDGET_"
+
+fun externalWidgetLayoutId(appWidgetId: Int) = "$EXTERNAL_WIDGET_PREFIX$appWidgetId"
+
+data class ExternalWidgetConfig(
+    val appWidgetId: Int,
+    val providerPackage: String,
+    val providerClass: String,
+    val label: String
+)
+
 data class AppSettings(
     val vehicleName: String = "MY CAR",
     val accentColor: Int = Color.White.toArgb(),
@@ -177,6 +188,7 @@ data class AppSettings(
     val showNowPlaying: Boolean = true,
     val shortcuts: List<ShortcutConfig> = defaultShortcuts(),
     val widgetLayout: List<WidgetConfig> = defaultWidgetLayout(),
+    val externalWidgets: List<ExternalWidgetConfig> = emptyList(),
     val carPlayPackage: String = "",
     val androidAutoPackage: String = "",
     val useGradient: Boolean = false,
@@ -233,6 +245,7 @@ fun AppSettings.activeWidgetIds(): Set<String> = buildSet {
     if (showSoundboard) add("SOUNDBOARD")
     if (showMusicVisualizer) add("MUSIC_VISUALIZER")
     if (showQuickControls) add("QUICK_CONTROLS")
+    externalWidgets.forEach { add(externalWidgetLayoutId(it.appWidgetId)) }
 }
 
 /**

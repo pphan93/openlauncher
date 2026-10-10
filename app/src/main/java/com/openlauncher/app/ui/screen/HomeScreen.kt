@@ -1,5 +1,8 @@
 package com.openlauncher.app.ui.screen
 
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.res.Configuration
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,7 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.ClockStyle
+import com.openlauncher.app.data.EXTERNAL_WIDGET_PREFIX
 import com.openlauncher.app.data.MusicVisualizerStyle
 import com.openlauncher.app.data.computeWidgetMove
 import com.openlauncher.app.data.GRID_COLS
@@ -46,6 +51,7 @@ import com.openlauncher.app.ui.theme.LocalDayMode
 import com.openlauncher.app.ui.widget.*
 import java.util.Calendar
 import com.openlauncher.app.util.LocationData
+import kotlinx.coroutines.delay
 
 private val WIDGET_RADIUS = RoundedCornerShape(0.dp)
 
@@ -67,7 +73,8 @@ private val ALL_WIDGET_TYPES = listOf(
     WidgetTypeInfo("TRIP_TRACKER", "TRIP TRACKER", Icons.Default.Map,          "Trip logs & stats"),
     WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads"),
     WidgetTypeInfo("MUSIC_VISUALIZER", "EQUALIZER", Icons.Default.Equalizer,   "Animated music visualizer"),
-    WidgetTypeInfo("QUICK_CONTROLS", "QUICK CONTROLS", Icons.Default.Tune,      "Volume, brightness & connections")
+    WidgetTypeInfo("QUICK_CONTROLS", "QUICK CONTROLS", Icons.Default.Tune,      "Volume, brightness & connections"),
+    WidgetTypeInfo("ANDROID_WIDGET", "ANDROID WIDGETS", Icons.Default.Widgets,   "Widgets from installed apps")
 )
 
 private fun canAddWidget(settings: com.openlauncher.app.data.AppSettings): Boolean {
@@ -83,6 +90,7 @@ private fun canAddWidget(settings: com.openlauncher.app.data.AppSettings): Boole
         if (settings.showSoundboard) add("SOUNDBOARD")
         if (settings.showMusicVisualizer) add("MUSIC_VISUALIZER")
         if (settings.showQuickControls) add("QUICK_CONTROLS")
+        settings.externalWidgets.forEach { add("$EXTERNAL_WIDGET_PREFIX${it.appWidgetId}") }
     }
     val activeWidgets = settings.widgetLayout.filter { it.enabled && it.id in visibleIds }
     val occupied = buildSet<Pair<Int, Int>> {
@@ -124,6 +132,8 @@ fun HomeScreen(
     onMoveWidget: (id: String, gridX: Int, gridY: Int) -> Unit,
     onAddWidget: (id: String) -> Unit,
     onRemoveWidget: (id: String) -> Unit,
+    appWidgetHost: AppWidgetHost,
+    onAddAndroidWidget: (AppWidgetProviderInfo) -> Unit,
     onSetClockStyle: (ClockStyle) -> Unit,
     onSetVitalsAsBars: (Boolean) -> Unit = {},
     onSetSpeedometerDigitalOnly: (Boolean) -> Unit = {},
@@ -164,6 +174,19 @@ fun HomeScreen(
     val isLandscape      = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var editMode         by remember { mutableStateOf(false) }
     var widgetLibraryOpen by remember { mutableStateOf(false) }
+    var androidWidgetPickerOpen by remember { mutableStateOf(false) }
+    var openAndroidWidgetPickerAfterLibrary by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    LaunchedEffect(openAndroidWidgetPickerAfterLibrary) {
+        if (openAndroidWidgetPickerAfterLibrary) {
+            // Wait for the library tap to finish before placing selectable provider rows
+            // under the pointer. This prevents a single tap from choosing a provider too.
+            delay(180)
+            androidWidgetPickerOpen = true
+            openAndroidWidgetPickerAfterLibrary = false
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
 
@@ -250,6 +273,7 @@ fun HomeScreen(
                 if (settings.showSoundboard) add("SOUNDBOARD")
                 if (settings.showMusicVisualizer) add("MUSIC_VISUALIZER")
                 if (settings.showQuickControls) add("QUICK_CONTROLS")
+                settings.externalWidgets.forEach { add("$EXTERNAL_WIDGET_PREFIX${it.appWidgetId}") }
             }
 
             // Keep only visible widgets exactly as configured in settings, allowing explicit resizing to dictate layout
@@ -316,6 +340,10 @@ fun HomeScreen(
                 val width  = cellW * w.spanX + gap * (w.spanX - 1)
                 val height = cellH * w.spanY + gap * (w.spanY - 1)
 
+                val externalWidget = settings.externalWidgets.firstOrNull {
+                    "$EXTERNAL_WIDGET_PREFIX${it.appWidgetId}" == w.id
+                }
+                val isExternalWidget = externalWidget != null
                 val label = when (w.id) {
                     "CLOCK"       -> clockTimeLabel(Calendar.getInstance())
                     "WEATHER"     -> "WEATHER"
@@ -327,7 +355,7 @@ fun HomeScreen(
                     "SOUNDBOARD"  -> "SOUND"
                     "MUSIC_VISUALIZER" -> "EQUALIZER"
                     "QUICK_CONTROLS" -> "CONTROLS"
-                    else          -> w.id
+                    else          -> externalWidget?.label ?: w.id
                 }
 
                 // Original (pre-auto-expand) spanX needed for drag boundary clamping
@@ -356,11 +384,15 @@ fun HomeScreen(
                             },
                             shape = WIDGET_RADIUS
                         )
-                        .combinedClickable(
-                            indication        = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            onClick           = { if (editMode) contextMenuId = w.id },
-                            onLongClick       = { if (!editMode) contextMenuId = w.id }
+                        .then(
+                            if (!isExternalWidget || editMode) {
+                                Modifier.combinedClickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    onClick = { if (editMode) contextMenuId = w.id },
+                                    onLongClick = { if (!editMode) contextMenuId = w.id }
+                                )
+                            } else Modifier
                         )
                         .then(
                             if (editMode) Modifier.pointerInput(editMode, w.id, w.gridX, w.gridY) {
@@ -494,11 +526,27 @@ fun HomeScreen(
                             isEditing  = editMode,
                             modifier   = Modifier.fillMaxSize()
                         )
+                        else -> if (externalWidget != null) {
+                            if (editMode) {
+                                AndroidWidgetEditPlaceholder(
+                                    label = externalWidget.label,
+                                    accent = accent,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                HostedAndroidWidget(
+                                    appWidgetId = externalWidget.appWidgetId,
+                                    host = appWidgetHost,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                     }
 
                     // Label — hide when album art fills the widget background
                     val labelColor = when {
                         isGhost -> Color.Transparent
+                        isExternalWidget && !editMode -> Color.Transparent
                         w.id == "NOW_PLAYING" && nowPlaying?.albumArt != null && nowPlaying.title.isNotEmpty() -> Color.Transparent
                         isDayMode -> Color(0xFF999999)
                         else      -> Color(0xFF3A3A3A)
@@ -532,6 +580,7 @@ fun HomeScreen(
             pipAppPackage       = settings.pipAppPackage,
             isDayMode           = isDayMode,
             onResize            = { contextMenuId = null; resizingId = id },
+            onRemove            = { contextMenuId = null; onRemoveWidget(id) },
             onAssignCarPlay     = { contextMenuId = null; onAssignCarPlay() },
             onAssignAndroidAuto = { contextMenuId = null; onAssignAndroidAuto() },
             onClearCarPlay      = { contextMenuId = null; onClearCarPlay() },
@@ -569,9 +618,37 @@ fun HomeScreen(
             settings  = settings,
             accent    = accent,
             isDayMode = isDayMode,
-            onAdd     = { id -> onAddWidget(id) },
+            onAdd     = { id ->
+                if (id == "ANDROID_WIDGET") {
+                    widgetLibraryOpen = false
+                    openAndroidWidgetPickerAfterLibrary = true
+                } else {
+                    onAddWidget(id)
+                }
+            },
             onRemove  = { id -> onRemoveWidget(id) },
             onDismiss = { widgetLibraryOpen = false }
+        )
+    }
+
+    if (androidWidgetPickerOpen) {
+        val providers = remember(androidWidgetPickerOpen) {
+            AppWidgetManager.getInstance(context).installedProviders
+                .filter {
+                    it.widgetCategory == 0 ||
+                        (it.widgetCategory and AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN) != 0
+                }
+                .sortedBy { runCatching { it.loadLabel(context.packageManager).toString() }.getOrDefault("") }
+        }
+        AndroidWidgetPickerDialog(
+            providers = providers,
+            accent = accent,
+            isDayMode = isDayMode,
+            onSelect = { provider ->
+                androidWidgetPickerOpen = false
+                onAddAndroidWidget(provider)
+            },
+            onDismiss = { androidWidgetPickerOpen = false }
         )
     }
 }
@@ -589,6 +666,7 @@ private fun WidgetContextMenu(
     pipAppPackage: String = "",
     isDayMode: Boolean,
     onResize: () -> Unit,
+    onRemove: () -> Unit,
     onAssignCarPlay: () -> Unit,
     onAssignAndroidAuto: () -> Unit,
     onClearCarPlay: () -> Unit,
@@ -615,6 +693,14 @@ private fun WidgetContextMenu(
         ) {
             val inactiveMenuTint = if (isDayMode) Color(0xFF777777) else Color(0xFF555555)
             ContextRow("RESIZE", Icons.Default.OpenWith, accent, onResize, isDayMode = isDayMode)
+            HorizontalDivider(color = menuDivider)
+            ContextRow(
+                "REMOVE WIDGET",
+                Icons.Default.DeleteOutline,
+                Color(0xFF884444),
+                onRemove,
+                isDayMode = isDayMode
+            )
             if (widgetId == "CLOCK") {
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
@@ -919,7 +1005,8 @@ private fun WidgetLibraryDialog(
                 modifier              = Modifier.fillMaxWidth()
             ) {
                 items(ALL_WIDGET_TYPES) { info ->
-                    val isActive = info.id in activeIds
+                    val isExternalPicker = info.id == "ANDROID_WIDGET"
+                    val isActive = !isExternalPicker && info.id in activeIds
                     WidgetLibraryCard(
                         info     = info,
                         isActive = isActive,

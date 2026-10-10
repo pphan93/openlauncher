@@ -26,6 +26,9 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- User-approved access used by the Quick Controls brightness slider. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <!-- Required for acting as a home-screen widget host. Binding is still
+         explicitly approved by the user through Android's system dialog. -->
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
 
     <!-- Wallpaper from gallery -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
