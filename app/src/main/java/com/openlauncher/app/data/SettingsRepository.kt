@@ -30,6 +30,9 @@ class SettingsRepository(private val context: Context) {
         val UNIT_SYSTEM        = stringPreferencesKey("unit_system")
         val APP_FONT           = stringPreferencesKey("app_font")
         val SHOW_WEATHER       = booleanPreferencesKey("show_weather")
+        val MANUAL_WEATHER_LOCATION_NAME = stringPreferencesKey("manual_weather_location_name")
+        val MANUAL_WEATHER_LATITUDE = doublePreferencesKey("manual_weather_latitude")
+        val MANUAL_WEATHER_LONGITUDE = doublePreferencesKey("manual_weather_longitude")
         val SHOW_CLOCK         = booleanPreferencesKey("show_clock")
         val SHOW_TELEMETRY     = booleanPreferencesKey("show_telemetry")
         val SHOW_NOW_PLAYING   = booleanPreferencesKey("show_now_playing")
@@ -116,6 +119,9 @@ class SettingsRepository(private val context: Context) {
                 unitSystem     = prefs[Keys.UNIT_SYSTEM]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() } ?: defaults.unitSystem,
                 appFont        = prefs[Keys.APP_FONT]?.let { runCatching { AppFont.valueOf(it) }.getOrNull() } ?: defaults.appFont,
                 showWeather    = prefs[Keys.SHOW_WEATHER]     ?: defaults.showWeather,
+                manualWeatherLocationName = prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] ?: defaults.manualWeatherLocationName,
+                manualWeatherLatitude = prefs[Keys.MANUAL_WEATHER_LATITUDE],
+                manualWeatherLongitude = prefs[Keys.MANUAL_WEATHER_LONGITUDE],
                 showClock      = prefs[Keys.SHOW_CLOCK]       ?: defaults.showClock,
                 showTelemetry  = prefs[Keys.SHOW_TELEMETRY]   ?: defaults.showTelemetry,
                 showNowPlaying = prefs[Keys.SHOW_NOW_PLAYING] ?: defaults.showNowPlaying,
@@ -184,6 +190,11 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.UNIT_SYSTEM]        = s.unitSystem.name
             prefs[Keys.APP_FONT]           = s.appFont.name
             prefs[Keys.SHOW_WEATHER]       = s.showWeather
+            prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] = s.manualWeatherLocationName
+            s.manualWeatherLatitude?.let { prefs[Keys.MANUAL_WEATHER_LATITUDE] = it }
+                ?: prefs.remove(Keys.MANUAL_WEATHER_LATITUDE)
+            s.manualWeatherLongitude?.let { prefs[Keys.MANUAL_WEATHER_LONGITUDE] = it }
+                ?: prefs.remove(Keys.MANUAL_WEATHER_LONGITUDE)
             prefs[Keys.SHOW_CLOCK]         = s.showClock
             prefs[Keys.SHOW_TELEMETRY]     = s.showTelemetry
             prefs[Keys.SHOW_NOW_PLAYING]   = s.showNowPlaying

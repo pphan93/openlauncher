@@ -25,10 +25,31 @@ fun WeatherWidget(
     val subColor     = if (isDayMode) Color(0xFF888888) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
 
     BoxWithConstraints(modifier = modifier) {
-        if (state != null) {
+        if (state == null) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(text = "⌖", color = accent, fontSize = 28.sp)
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    text = "WAITING FOR LOCATION",
+                    color = contentColor,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Set a fallback city in Settings → Weather",
+                    color = subColor,
+                    fontSize = 8.sp
+                )
+            }
+        } else {
             val forecastDays = when {
-                maxWidth >= 360.dp -> 7
-                maxWidth >= 250.dp -> 5
+                maxWidth >= 250.dp -> 7
+                maxWidth >= 180.dp -> 5
                 else -> 3
             }
             Column(

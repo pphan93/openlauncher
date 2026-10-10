@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.openlauncher.app.ui.components.ColorPickerDialog
 import com.openlauncher.app.ui.components.ConfirmDialog
+import com.openlauncher.app.viewmodel.LauncherViewModel
 import com.openlauncher.app.viewmodel.UpdateStatus
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
@@ -50,6 +51,9 @@ fun SettingsScreen(
     updateStatus: UpdateStatus,
     onCheckUpdates: () -> Unit,
     onResumeInstall: () -> Unit,
+    manualWeatherLocationState: LauncherViewModel.ManualWeatherLocationState,
+    onSetManualWeatherLocation: (String) -> Unit,
+    onClearManualWeatherLocation: () -> Unit,
     onUpdate: (AppSettings.() -> AppSettings) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
@@ -350,6 +354,74 @@ fun SettingsScreen(
         }
 
         // ── Sidebar Shortcuts ─────────────────────────────────────────────────
+        SettingsSection("Weather") {
+            var locationInput by remember(settings.manualWeatherLocationName) {
+                mutableStateOf(settings.manualWeatherLocationName)
+            }
+            SettingsRow(
+                label = "Manual Location",
+                sublabel = if (settings.manualWeatherLocationName.isNotEmpty()) {
+                    "Fallback when GPS is unavailable: ${settings.manualWeatherLocationName}"
+                } else {
+                    "Enter a city or town to use when GPS has no fix"
+                },
+                icon = Icons.Default.LocationCity
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = locationInput,
+                        onValueChange = { locationInput = it },
+                        placeholder = { Text("Edmonton, Canada", fontSize = 11.sp) },
+                        singleLine = true,
+                        enabled = !manualWeatherLocationState.isSearching,
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 11.sp,
+                            color = if (isDayMode) Color(0xFF111111) else Color.White
+                        ),
+                        colors = outlinedFieldColors(accent),
+                        modifier = Modifier.width(220.dp)
+                    )
+                    IconButton(
+                        onClick = { onSetManualWeatherLocation(locationInput) },
+                        enabled = !manualWeatherLocationState.isSearching,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        if (manualWeatherLocationState.isSearching) {
+                            CircularProgressIndicator(
+                                color = accent,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Icon(Icons.Default.Search, "Find location", tint = accent, modifier = Modifier.size(17.dp))
+                        }
+                    }
+                    if (settings.manualWeatherLocationName.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                locationInput = ""
+                                onClearManualWeatherLocation()
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, "Clear manual location", modifier = Modifier.size(17.dp))
+                        }
+                    }
+                }
+            }
+            if (manualWeatherLocationState.message.isNotEmpty()) {
+                Text(
+                    text = manualWeatherLocationState.message,
+                    color = if (manualWeatherLocationState.isError) Color(0xFFCC6666) else accent,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(start = 32.dp, bottom = 10.dp)
+                )
+            }
+        }
+
         SettingsSection("Sidebar") {
             Column {
                 SettingsRow(

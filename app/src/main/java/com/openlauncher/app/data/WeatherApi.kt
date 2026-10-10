@@ -26,6 +26,21 @@ data class DailyWeather(
     @SerializedName("temperature_2m_min") val minimumTemperatures: List<Double> = emptyList()
 )
 
+data class GeocodingResponse(
+    @SerializedName("results") val results: List<GeocodingResult>? = null
+)
+
+data class GeocodingResult(
+    @SerializedName("name") val name: String,
+    @SerializedName("latitude") val latitude: Double,
+    @SerializedName("longitude") val longitude: Double,
+    @SerializedName("admin1") val region: String? = null,
+    @SerializedName("country") val country: String? = null
+) {
+    val displayName: String
+        get() = listOfNotNull(name, region, country).distinct().joinToString(", ")
+}
+
 interface WeatherApiService {
     @GET("v1/forecast")
     suspend fun getForecast(
@@ -40,6 +55,16 @@ interface WeatherApiService {
     ): OpenMeteoResponse
 }
 
+interface WeatherGeocodingService {
+    @GET("v1/search")
+    suspend fun search(
+        @Query("name") name: String,
+        @Query("count") count: Int = 1,
+        @Query("language") language: String = "en",
+        @Query("format") format: String = "json"
+    ): GeocodingResponse
+}
+
 object WeatherApi {
     private val client = OkHttpClient.Builder().build()
 
@@ -49,4 +74,11 @@ object WeatherApi {
         .addConverterFactory(GsonConverterFactory.create())
         .build()
         .create(WeatherApiService::class.java)
+
+    val geocodingService: WeatherGeocodingService = Retrofit.Builder()
+        .baseUrl("https://geocoding-api.open-meteo.com/")
+        .client(client)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(WeatherGeocodingService::class.java)
 }

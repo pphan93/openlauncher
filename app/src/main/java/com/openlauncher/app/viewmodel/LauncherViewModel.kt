@@ -42,6 +42,12 @@ import kotlinx.coroutines.flow.*
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
+    data class ManualWeatherLocationState(
+        val isSearching: Boolean = false,
+        val message: String = "",
+        val isError: Boolean = false
+    )
+
     private val settingsRepo = SettingsRepository(application)
     private val updateManager = AppUpdateManager(application, viewModelScope)
     private val locationMgr  = LocationCompassManager(application)
@@ -463,6 +469,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _weatherError = MutableStateFlow<String?>(null)
     val weatherError: StateFlow<String?> = _weatherError
 
+    private val _manualWeatherLocationState = MutableStateFlow(ManualWeatherLocationState())
+    val manualWeatherLocationState: StateFlow<ManualWeatherLocationState> = _manualWeatherLocationState
+
     private var weatherJob: Job? = null
 
     fun fetchWeather(lat: Double, lon: Double, metric: Boolean) {
@@ -503,6 +512,58 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 _weatherError.value = e.message
             }
         }
+    }
+
+    fun setManualWeatherLocation(query: String) {
+        val locationQuery = query.trim()
+        if (locationQuery.isEmpty()) {
+            _manualWeatherLocationState.value = ManualWeatherLocationState(
+                message = "Enter a city or town",
+                isError = true
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _manualWeatherLocationState.value = ManualWeatherLocationState(isSearching = true)
+            try {
+                val result = WeatherApi.geocodingService.search(locationQuery).results?.firstOrNull()
+                if (result == null) {
+                    _manualWeatherLocationState.value = ManualWeatherLocationState(
+                        message = "Location not found",
+                        isError = true
+                    )
+                    return@launch
+                }
+                settingsRepo.updateSettings { current ->
+                    current.copy(
+                        manualWeatherLocationName = result.displayName,
+                        manualWeatherLatitude = result.latitude,
+                        manualWeatherLongitude = result.longitude
+                    )
+                }
+                _manualWeatherLocationState.value = ManualWeatherLocationState(
+                    message = "Saved ${result.displayName}"
+                )
+            } catch (_: Exception) {
+                _manualWeatherLocationState.value = ManualWeatherLocationState(
+                    message = "Could not search. Check internet connection.",
+                    isError = true
+                )
+            }
+        }
+    }
+
+    fun clearManualWeatherLocation() {
+        updateSettings {
+            copy(
+                manualWeatherLocationName = "",
+                manualWeatherLatitude = null,
+                manualWeatherLongitude = null
+            )
+        }
+        if (locationMgr.location.value == null) _weather.value = null
+        _manualWeatherLocationState.value = ManualWeatherLocationState(message = "Using GPS only")
     }
 
     // ── Location & Compass ────────────────────────────────────────────────────
@@ -761,18 +822,34 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         loadInstalledApps()
         refreshConnectivity()
         if (hasSzchoicewayMcu) startHardwareRadioObserver()
-        // Fetch weather on first location fix, then every 30 minutes.
-        // The minute ticker covers the parked case where no location updates arrive.
+        // Prefer live GPS, but fall back to the manually saved location when the
+        // head unit has no fix. Refresh when the source changes and every 30 minutes.
         viewModelScope.launch {
             var lastFetchMs = 0L
+            var lastCoordinates: Pair<Double, Double>? = null
             merge(
-                locationMgr.location.filterNotNull(),
-                minuteTicker.mapNotNull { locationMgr.location.value }
-            ).collect { loc ->
+                locationMgr.location.map { Unit },
+                settings.map { Unit },
+                minuteTicker
+            ).collect {
+                val currentSettings = settings.value
+                val gps = locationMgr.location.value
+                val coordinates = if (gps != null) {
+                    gps.latitude to gps.longitude
+                } else {
+                    val latitude = currentSettings.manualWeatherLatitude
+                    val longitude = currentSettings.manualWeatherLongitude
+                    if (latitude != null && longitude != null) latitude to longitude else null
+                } ?: return@collect
                 val now = System.currentTimeMillis()
-                if (now - lastFetchMs >= 30 * 60 * 1_000L) {
+                if (coordinates != lastCoordinates || now - lastFetchMs >= 30 * 60 * 1_000L) {
                     lastFetchMs = now
-                    fetchWeather(loc.latitude, loc.longitude, settings.value.unitSystem.name == "METRIC")
+                    lastCoordinates = coordinates
+                    fetchWeather(
+                        coordinates.first,
+                        coordinates.second,
+                        currentSettings.unitSystem == com.openlauncher.app.data.UnitSystem.METRIC
+                    )
                 }
             }
         }

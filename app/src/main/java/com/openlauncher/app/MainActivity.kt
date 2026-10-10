@@ -226,6 +226,7 @@ class MainActivity : ComponentActivity() {
             val isDayModeVM by vm.isDayMode.collectAsStateWithLifecycle()
             val hardwareRadio by vm.hardwareRadio.collectAsStateWithLifecycle()
             val updateStatus by vm.updateStatus.collectAsStateWithLifecycle()
+            val manualWeatherLocationState by vm.manualWeatherLocationState.collectAsStateWithLifecycle()
             val systemIsDark = isSystemInDarkTheme()
             val isDayMode = if (settings.dayNightMode == DayNightMode.SYSTEM) !systemIsDark else isDayModeVM
             val pickerSlot      by vm.shortcutPickerSlot.collectAsStateWithLifecycle()
@@ -415,6 +416,9 @@ class MainActivity : ComponentActivity() {
                                         updateStatus    = updateStatus,
                                         onCheckUpdates  = { vm.checkForUpdates() },
                                         onResumeInstall = { vm.resumePendingUpdateInstall() },
+                                        manualWeatherLocationState = manualWeatherLocationState,
+                                        onSetManualWeatherLocation = vm::setManualWeatherLocation,
+                                        onClearManualWeatherLocation = vm::clearManualWeatherLocation,
                                         onUpdate        = { block -> vm.updateSettings(block) },
                                         onReset         = ::resetSettingsAndWidgets
                                     )
