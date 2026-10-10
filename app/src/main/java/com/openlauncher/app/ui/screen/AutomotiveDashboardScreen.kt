@@ -495,18 +495,46 @@ private fun VehicleStatusCard(
         ) {
             Canvas(Modifier.matchParentSize()) {
                 val horizon = size.height * 0.35f
-                val mountains = Path().apply {
-                    moveTo(0f, horizon)
-                    lineTo(size.width * 0.26f, horizon + size.height * 0.05f)
-                    lineTo(size.width * 0.48f, horizon + size.height * 0.14f)
-                    lineTo(size.width * 0.52f, horizon + size.height * 0.14f)
-                    lineTo(size.width * 0.76f, horizon + size.height * 0.04f)
-                    lineTo(size.width, horizon)
+                val distantMountains = Path().apply {
+                    moveTo(0f, horizon - size.height * 0.025f)
+                    cubicTo(
+                        size.width * 0.18f, horizon,
+                        size.width * 0.34f, horizon + size.height * 0.08f,
+                        size.width * 0.48f, horizon + size.height * 0.105f
+                    )
+                    cubicTo(
+                        size.width * 0.53f, horizon + size.height * 0.11f,
+                        size.width * 0.70f, horizon + size.height * 0.025f,
+                        size.width, horizon - size.height * 0.02f
+                    )
                     lineTo(size.width, size.height)
                     lineTo(0f, size.height)
                     close()
                 }
-                drawPath(mountains, Color(0xFF0C1325).copy(alpha = 0.92f))
+                drawPath(distantMountains, Color(0xFF151C31).copy(alpha = 0.76f))
+
+                val foregroundValley = Path().apply {
+                    moveTo(0f, horizon + size.height * 0.015f)
+                    cubicTo(
+                        size.width * 0.17f, horizon + size.height * 0.045f,
+                        size.width * 0.34f, horizon + size.height * 0.12f,
+                        size.width * 0.47f, horizon + size.height * 0.155f
+                    )
+                    cubicTo(
+                        size.width * 0.50f, horizon + size.height * 0.165f,
+                        size.width * 0.53f, horizon + size.height * 0.165f,
+                        size.width * 0.57f, horizon + size.height * 0.145f
+                    )
+                    cubicTo(
+                        size.width * 0.70f, horizon + size.height * 0.075f,
+                        size.width * 0.85f, horizon + size.height * 0.04f,
+                        size.width, horizon + size.height * 0.01f
+                    )
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(foregroundValley, Color(0xFF0A1224).copy(alpha = 0.96f))
                 drawLine(
                     color = Color(0xFF5863E8).copy(alpha = 0.68f),
                     start = Offset(size.width * 0.44f, size.height * 0.45f),
@@ -521,22 +549,22 @@ private fun VehicleStatusCard(
                 )
             }
             Column(
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 13.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 23.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     speed.roundToInt().toString(),
                     color = primary,
-                    fontSize = 54.sp,
+                    fontSize = 64.sp,
                     fontWeight = FontWeight.Light,
-                    lineHeight = 56.sp
+                    lineHeight = 66.sp
                 )
                 Text(speedUnit, color = secondary, fontSize = 12.sp, fontWeight = FontWeight.Light)
             }
 
             Box(
                 modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-42).dp)
-                    .fillMaxWidth(0.98f).aspectRatio(1.5f)
+                    .fillMaxWidth(0.86f).aspectRatio(1.5f)
             ) {
                 Image(
                     painter = painterResource(R.drawable.camry_2019_le_black_rear),
