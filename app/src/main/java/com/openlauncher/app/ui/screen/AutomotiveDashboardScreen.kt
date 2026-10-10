@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -139,7 +140,6 @@ fun AutomotiveDashboardScreen(
             )
 
             VehicleStatusCard(
-                vehicleName = settings.vehicleName,
                 licensePlate = settings.licensePlate,
                 location = location,
                 bearing = bearing,
@@ -467,7 +467,6 @@ private fun PhotoCarouselCard(
 
 @Composable
 private fun VehicleStatusCard(
-    vehicleName: String,
     licensePlate: String,
     location: LocationData?,
     bearing: Float,
@@ -483,90 +482,104 @@ private fun VehicleStatusCard(
     val rangeUnit = if (metric) "km" else "mi"
 
     Column(
-        modifier = modifier.clip(DashboardRadius).background(cardColor).padding(9.dp),
+        modifier = modifier.clip(DashboardRadius).background(Color(0xFF0B111C)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            vehicleName.ifBlank { "2019 CAMRY LE" },
-            color = secondary,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 1.1.sp,
-            maxLines = 1
-        )
-        Text(
-            speed.roundToInt().toString(),
-            color = primary,
-            fontSize = 46.sp,
-            fontWeight = FontWeight.Light,
-            lineHeight = 48.sp
-        )
-        Text(speedUnit, color = secondary, fontSize = 11.sp, fontWeight = FontWeight.Light)
-
         Box(
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)
-                .clip(RoundedCornerShape(13.dp))
+            modifier = Modifier.fillMaxWidth().weight(1f)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF101522), Color(0xFF1B2030), Color(0xFF080C14))
+                        listOf(Color(0xFF080B12), Color(0xFF242A40), Color(0xFF080D17))
                     )
                 )
         ) {
             Canvas(Modifier.matchParentSize()) {
-                val horizon = size.height * 0.38f
+                val horizon = size.height * 0.35f
+                val mountains = Path().apply {
+                    moveTo(0f, horizon)
+                    lineTo(size.width * 0.26f, horizon + size.height * 0.05f)
+                    lineTo(size.width * 0.48f, horizon + size.height * 0.14f)
+                    lineTo(size.width * 0.52f, horizon + size.height * 0.14f)
+                    lineTo(size.width * 0.76f, horizon + size.height * 0.04f)
+                    lineTo(size.width, horizon)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(mountains, Color(0xFF0C1325).copy(alpha = 0.92f))
                 drawLine(
                     color = Color(0xFF5863E8).copy(alpha = 0.68f),
-                    start = Offset(size.width * 0.42f, horizon),
-                    end = Offset(size.width * 0.04f, size.height),
+                    start = Offset(size.width * 0.44f, size.height * 0.45f),
+                    end = Offset(size.width * 0.03f, size.height * 0.91f),
                     strokeWidth = 1.4.dp.toPx()
                 )
                 drawLine(
                     color = Color(0xFF5863E8).copy(alpha = 0.68f),
-                    start = Offset(size.width * 0.58f, horizon),
-                    end = Offset(size.width * 0.96f, size.height),
+                    start = Offset(size.width * 0.56f, size.height * 0.45f),
+                    end = Offset(size.width * 0.97f, size.height * 0.91f),
                     strokeWidth = 1.4.dp.toPx()
                 )
             }
-            Image(
-                painter = painterResource(R.drawable.camry_2019_le_black_rear),
-                contentDescription = "Rear view of black 2019 Toyota Camry LE",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth(0.92f).align(Alignment.BottomCenter)
-            )
-            Box(
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 68.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFFE9EAEC))
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            Column(
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 13.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    licensePlate.ifBlank { "ADD PLATE" },
-                    color = Color(0xFF17191C),
-                    fontSize = 5.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1
+                    speed.roundToInt().toString(),
+                    color = primary,
+                    fontSize = 54.sp,
+                    fontWeight = FontWeight.Light,
+                    lineHeight = 56.sp
                 )
+                Text(speedUnit, color = secondary, fontSize = 12.sp, fontWeight = FontWeight.Light)
+            }
+
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-42).dp)
+                    .fillMaxWidth(0.98f).aspectRatio(1.5f)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.camry_2019_le_black_rear),
+                    contentDescription = "Rear view of black 2019 Toyota Camry LE",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier.align(Alignment.Center).offset(y = (-4).dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFFF1F2F3))
+                        .padding(horizontal = 9.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        licensePlate.ifBlank { "ADD PLATE" },
+                        color = Color(0xFF101216),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.7.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 9.dp)
+                    .fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF111827).copy(alpha = 0.96f)).padding(horizontal = 11.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.WaterDrop, null, tint = Color(0xFF43E6B0), modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("--%", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Box(
+                    Modifier.padding(horizontal = 10.dp).weight(1f).height(3.dp)
+                        .clip(CircleShape).background(secondary.copy(alpha = 0.18f))
+                )
+                Text("-- $rangeUnit", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
-                .clip(RoundedCornerShape(11.dp)).background(Color(0xFF111722)).padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Outlined.WaterDrop, null, tint = Color(0xFF43E6B0), modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(5.dp))
-            Text("FUEL  --%", color = primary, fontSize = 9.sp, fontWeight = FontWeight.Medium)
-            Box(
-                Modifier.padding(horizontal = 9.dp).weight(1f).height(3.dp)
-                    .clip(CircleShape).background(secondary.copy(alpha = 0.16f))
-            )
-            Text("RANGE  -- $rangeUnit", color = primary, fontSize = 9.sp, fontWeight = FontWeight.Medium)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)
                 .clip(RoundedCornerShape(11.dp)).background(Color(0xFF111722)).padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
