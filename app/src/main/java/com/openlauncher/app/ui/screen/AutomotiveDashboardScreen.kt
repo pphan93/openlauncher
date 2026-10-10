@@ -1,7 +1,13 @@
 package com.openlauncher.app.ui.screen
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaMetadata
 import android.os.SystemClock
+import android.provider.CalendarContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -34,12 +40,14 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.core.content.ContextCompat
 import com.openlauncher.app.R
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.model.NowPlayingState
@@ -48,9 +56,12 @@ import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.ui.widget.WeatherGlyph
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Calendar as JavaCalendar
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -134,13 +145,24 @@ fun AutomotiveDashboardScreen(
                 )
             }
 
-            PhotoCarouselCard(
-                photoUris = settings.dashboardPhotoUris,
-                cardColor = visibleCard,
-                primary = primary,
-                secondary = secondary,
-                modifier = Modifier.weight(1.72f).fillMaxHeight()
-            )
+            Column(
+                modifier = Modifier.weight(1.72f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PhotoCarouselCard(
+                    photoUris = settings.dashboardPhotoUris,
+                    cardColor = visibleCard,
+                    primary = primary,
+                    secondary = secondary,
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                )
+                DashboardCalendarCard(
+                    cardColor = visibleCard,
+                    primary = primary,
+                    secondary = secondary,
+                    modifier = Modifier.fillMaxWidth().height(84.dp)
+                )
+            }
 
             VehicleStatusCard(
                 licensePlate = settings.licensePlate,
@@ -519,6 +541,159 @@ private fun PhotoCarouselCard(
             }
         }
     }
+}
+
+private data class DashboardCalendarEvent(
+    val title: String,
+    val startsAt: Long
+)
+
+@Composable
+private fun DashboardCalendarCard(
+    cardColor: Color,
+    primary: Color,
+    secondary: Color,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var events by remember { mutableStateOf<List<DashboardCalendarEvent>>(emptyList()) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasPermission = granted }
+
+    LaunchedEffect(hasPermission) {
+        events = if (hasPermission) {
+            withContext(Dispatchers.IO) { loadUpcomingCalendarEvents(context) }
+        } else {
+            emptyList()
+        }
+    }
+
+    Row(
+        modifier = modifier.clip(DashboardRadius).background(cardColor)
+            .clickable(enabled = !hasPermission) {
+                permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+            }
+            .padding(horizontal = 18.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.width(3.dp).fillMaxHeight().clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(Color(0xFF5BE27D), DashboardYellow, Color(0xFFFFBE73))))
+        )
+        Spacer(Modifier.width(18.dp))
+        Icon(Icons.Default.CalendarMonth, null, tint = primary, modifier = Modifier.size(27.dp))
+        Spacer(Modifier.width(18.dp))
+
+        when {
+            !hasPermission -> {
+                Column(Modifier.weight(1f)) {
+                    Text("Connect Calendar", color = primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Tap to show your next appointments", color = secondary, fontSize = 9.sp)
+                }
+            }
+            events.isEmpty() -> {
+                Column(Modifier.weight(1f)) {
+                    Text("No upcoming events", color = primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Your next 7 days are clear", color = secondary, fontSize = 9.sp)
+                }
+            }
+            else -> {
+                CalendarEventSummary(events[0], primary, secondary, Modifier.weight(1f))
+                VerticalDivider(
+                    modifier = Modifier.fillMaxHeight().padding(horizontal = 18.dp),
+                    color = secondary.copy(alpha = 0.13f)
+                )
+                events.getOrNull(1)?.let {
+                    CalendarEventSummary(it, primary, secondary, Modifier.weight(1f))
+                } ?: Column(Modifier.weight(1f)) {
+                    Text("Nothing after that", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text("Next 7 days", color = secondary, fontSize = 9.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarEventSummary(
+    event: DashboardCalendarEvent,
+    primary: Color,
+    secondary: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier) {
+        Text(
+            event.title,
+            color = primary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(calendarEventTimeLabel(event.startsAt), color = secondary, fontSize = 9.sp, maxLines = 1)
+    }
+}
+
+private fun loadUpcomingCalendarEvents(context: Context): List<DashboardCalendarEvent> {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) !=
+        PackageManager.PERMISSION_GRANTED
+    ) return emptyList()
+
+    val now = System.currentTimeMillis()
+    val end = now + 7L * 24L * 60L * 60L * 1_000L
+    val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        .appendPath(now.toString())
+        .appendPath(end.toString())
+        .build()
+    val projection = arrayOf(
+        CalendarContract.Instances.TITLE,
+        CalendarContract.Instances.BEGIN
+    )
+
+    return runCatching {
+        context.contentResolver.query(
+            uri,
+            projection,
+            "${CalendarContract.Instances.BEGIN} >= ?",
+            arrayOf(now.toString()),
+            "${CalendarContract.Instances.BEGIN} ASC"
+        )?.use { cursor ->
+            val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.TITLE)
+            val beginIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.BEGIN)
+            buildList {
+                while (cursor.moveToNext() && size < 2) {
+                    add(
+                        DashboardCalendarEvent(
+                            title = cursor.getString(titleIndex)?.ifBlank { "Calendar event" } ?: "Calendar event",
+                            startsAt = cursor.getLong(beginIndex)
+                        )
+                    )
+                }
+            }
+        } ?: emptyList()
+    }.getOrDefault(emptyList())
+}
+
+private fun calendarEventTimeLabel(startsAt: Long): String {
+    val now = JavaCalendar.getInstance()
+    val event = JavaCalendar.getInstance().apply { timeInMillis = startsAt }
+    val tomorrow = JavaCalendar.getInstance().apply { add(JavaCalendar.DAY_OF_YEAR, 1) }
+    val day = when {
+        now.get(JavaCalendar.YEAR) == event.get(JavaCalendar.YEAR) &&
+            now.get(JavaCalendar.DAY_OF_YEAR) == event.get(JavaCalendar.DAY_OF_YEAR) -> "Today"
+        tomorrow.get(JavaCalendar.YEAR) == event.get(JavaCalendar.YEAR) &&
+            tomorrow.get(JavaCalendar.DAY_OF_YEAR) == event.get(JavaCalendar.DAY_OF_YEAR) -> "Tomorrow"
+        else -> SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(startsAt))
+    }
+    val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(startsAt))
+    return "$day  •  $time"
 }
 
 @Composable
