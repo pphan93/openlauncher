@@ -1,10 +1,14 @@
 package com.openlauncher.app.model
 
+import java.text.SimpleDateFormat
+import java.util.Locale
+
 data class WeatherState(
     val temperatureCelsius: Double,
     val weatherCode: Int,
     val windspeedKmh: Double,
-    val isDay: Boolean
+    val isDay: Boolean,
+    val dailyForecast: List<DailyForecast> = emptyList()
 ) {
     // roundToInt, not toInt — truncation displayed 20.9° as 20°
     fun temperatureDisplay(metric: Boolean): String =
@@ -15,7 +19,27 @@ data class WeatherState(
     val conditionIcon: String get() = wmoCodeToEmoji(weatherCode, isDay)
 }
 
+data class DailyForecast(
+    val date: String,
+    val weatherCode: Int,
+    val maximumCelsius: Double,
+    val minimumCelsius: Double
+) {
+    fun maximumDisplay(metric: Boolean): String = temperatureDisplay(maximumCelsius, metric)
+    fun minimumDisplay(metric: Boolean): String = temperatureDisplay(minimumCelsius, metric)
+
+    val dayLabel: String get() = runCatching {
+        val dateValue = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)
+        dateValue?.let { SimpleDateFormat("EEE", Locale.getDefault()).format(it).uppercase() }
+    }.getOrNull() ?: date
+
+    val conditionIcon: String get() = wmoCodeToEmoji(weatherCode, true)
+}
+
 private fun celsiusToFahrenheit(c: Double) = c * 9.0 / 5.0 + 32.0
+
+private fun temperatureDisplay(celsius: Double, metric: Boolean): String =
+    if (metric) "${Math.round(celsius)}°" else "${Math.round(celsiusToFahrenheit(celsius))}°"
 
 private fun wmoCodeToLabel(code: Int): String = when (code) {
     0 -> "Clear"

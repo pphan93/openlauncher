@@ -1,6 +1,7 @@
 package com.openlauncher.app.ui.widget
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -23,31 +24,74 @@ fun WeatherWidget(
     val contentColor = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
     val subColor     = if (isDayMode) Color(0xFF888888) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
 
-    Box(modifier = modifier) {
+    BoxWithConstraints(modifier = modifier) {
         if (state != null) {
+            val forecastDays = when {
+                maxWidth >= 360.dp -> 7
+                maxWidth >= 250.dp -> 5
+                else -> 3
+            }
             Column(
-                modifier            = Modifier.fillMaxSize().padding(start = 14.dp, bottom = 14.dp),
+                modifier            = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.Bottom,
                 horizontalAlignment = Alignment.Start
             ) {
-                Text(
-                    text     = state.conditionIcon,
-                    fontSize = 34.sp
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text       = state.temperatureDisplay(metric),
-                    color      = contentColor,
-                    fontSize   = 32.sp,
-                    fontWeight = FontWeight.Light,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text          = state.conditionLabel.uppercase(),
-                    color         = subColor,
-                    fontSize      = 9.sp,
-                    letterSpacing = 1.sp
-                )
+                Spacer(Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = state.conditionIcon, fontSize = 32.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = state.temperatureDisplay(metric),
+                            color = contentColor,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Light,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = state.conditionLabel.uppercase(),
+                            color = subColor,
+                            fontSize = 8.sp,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                if (state.dailyForecast.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = accent.copy(alpha = 0.22f))
+                    Spacer(Modifier.height(9.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        state.dailyForecast.take(forecastDays).forEachIndexed { index, day ->
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = if (index == 0) "TODAY" else day.dayLabel,
+                                    color = if (index == 0) accent else subColor,
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(text = day.conditionIcon, fontSize = 15.sp)
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = day.maximumDisplay(metric),
+                                    color = contentColor,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = day.minimumDisplay(metric),
+                                    color = subColor,
+                                    fontSize = 8.sp
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

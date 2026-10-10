@@ -30,6 +30,7 @@ import com.openlauncher.app.data.defaultShortcuts
 import com.openlauncher.app.data.externalWidgetLayoutId
 import com.openlauncher.app.util.SunriseSunset
 import com.openlauncher.app.model.AppInfo
+import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
@@ -473,11 +474,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 // the value through two lossy conversions
                 val resp = WeatherApi.service.getForecast(lat, lon, temperatureUnit = "celsius")
                 resp.currentWeather?.let { cw ->
+                    val daily = resp.daily
+                    val forecastCount = listOf(
+                        daily?.dates?.size ?: 0,
+                        daily?.weatherCodes?.size ?: 0,
+                        daily?.maximumTemperatures?.size ?: 0,
+                        daily?.minimumTemperatures?.size ?: 0
+                    ).minOrNull() ?: 0
                     _weather.value = WeatherState(
                         temperatureCelsius = cw.temperature,
                         weatherCode       = cw.weathercode,
                         windspeedKmh      = cw.windspeed,
-                        isDay             = cw.isDay == 1
+                        isDay             = cw.isDay == 1,
+                        dailyForecast     = if (daily == null) emptyList() else {
+                            (0 until forecastCount).map { index ->
+                                DailyForecast(
+                                    date = daily.dates[index],
+                                    weatherCode = daily.weatherCodes[index],
+                                    maximumCelsius = daily.maximumTemperatures[index],
+                                    minimumCelsius = daily.minimumTemperatures[index]
+                                )
+                            }
+                        }
                     )
                 }
                 _weatherError.value = null

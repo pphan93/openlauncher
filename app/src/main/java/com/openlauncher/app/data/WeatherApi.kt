@@ -8,7 +8,8 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 data class OpenMeteoResponse(
-    @SerializedName("current_weather") val currentWeather: CurrentWeather?
+    @SerializedName("current_weather") val currentWeather: CurrentWeather?,
+    @SerializedName("daily") val daily: DailyWeather?
 )
 
 data class CurrentWeather(
@@ -18,12 +19,22 @@ data class CurrentWeather(
     @SerializedName("is_day")       val isDay: Int
 )
 
+data class DailyWeather(
+    @SerializedName("time") val dates: List<String> = emptyList(),
+    @SerializedName("weather_code") val weatherCodes: List<Int> = emptyList(),
+    @SerializedName("temperature_2m_max") val maximumTemperatures: List<Double> = emptyList(),
+    @SerializedName("temperature_2m_min") val minimumTemperatures: List<Double> = emptyList()
+)
+
 interface WeatherApiService {
     @GET("v1/forecast")
     suspend fun getForecast(
         @Query("latitude")         latitude: Double,
         @Query("longitude")        longitude: Double,
         @Query("current_weather")  currentWeather: Boolean = true,
+        @Query("daily")            daily: String = "weather_code,temperature_2m_max,temperature_2m_min",
+        @Query("forecast_days")    forecastDays: Int = 7,
+        @Query("timezone")         timezone: String = "auto",
         @Query("temperature_unit") temperatureUnit: String = "celsius",
         @Query("windspeed_unit")   windspeedUnit: String = "kmh"
     ): OpenMeteoResponse
