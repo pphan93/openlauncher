@@ -209,9 +209,6 @@ fun Sidebar(
                 .background(if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A))
                 .padding(horizontal = 24.dp, vertical = 7.dp)
         ) {
-            // Shortcuts centred, inset past the edge-pinned nav buttons and
-            // scrollable — an unbounded row ran beneath the nav buttons and off
-            // both screen edges once enough slots were added
             Row(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -222,21 +219,18 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                val splitIndex = minOf(2, settings.shortcuts.size)
-                shortcutsContent((0 until splitIndex).toList())
-                NavButton(Icons.Default.Apps, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
-                    onNavigate(NavDestination.APP_LIBRARY)
-                }
                 NavButton(Icons.Default.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true) {
                     onNavigate(NavDestination.HOME)
                 }
-                shortcutsContent((splitIndex until settings.shortcuts.size).toList())
+                NavButton(Icons.Default.Apps, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
+                    onNavigate(NavDestination.APP_LIBRARY)
+                }
                 NavButton(Icons.Default.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true) {
                     onNavigate(NavDestination.SETTINGS)
                 }
+                shortcutsContent(settings.shortcuts.indices.toList())
             }
 
-            // Nav buttons pinned to one edge, Home always outermost
         }
     } else {
         Column(

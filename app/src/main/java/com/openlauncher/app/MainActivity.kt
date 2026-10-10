@@ -404,7 +404,6 @@ class MainActivity : ComponentActivity() {
                         if (isBottomBar) {
                             Column(modifier = Modifier.fillMaxSize()) {
                                 mainPane(Modifier.weight(1f).fillMaxWidth())
-                                androidx.compose.material3.HorizontalDivider(color = layoutDivColor)
                                 sidebarContent()
                             }
                         } else {
