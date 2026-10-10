@@ -119,7 +119,7 @@ fun AutomotiveDashboardScreen(
                     onPrev = onPrev,
                     onSeek = onSeek,
                     onOpen = onTapNowPlaying,
-                    modifier = Modifier.weight(1.25f)
+                    modifier = Modifier.weight(0.95f)
                 )
                 DashboardWeatherClimateCard(
                     state = weather,
@@ -127,7 +127,7 @@ fun AutomotiveDashboardScreen(
                     cardColor = visibleCard,
                     primary = primary,
                     secondary = secondary,
-                    modifier = Modifier.weight(1.2f)
+                    modifier = Modifier.weight(1.45f)
                 )
             }
 
@@ -271,7 +271,7 @@ private fun DashboardMusicCard(
 
     Column(
         modifier = modifier.fillMaxWidth().clip(DashboardRadius).background(cardColor)
-            .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 14.dp),
+            .clickable(onClick = onOpen).padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -280,64 +280,64 @@ private fun DashboardMusicCard(
                     bitmap = state.albumArt.asImageBitmap(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(8.dp))
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp)).background(DashboardYellow),
+                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(8.dp)).background(DashboardYellow),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.MusicNote, null, tint = Color.Black, modifier = Modifier.size(24.dp)) }
+                ) { Icon(Icons.Default.MusicNote, null, tint = Color.Black, modifier = Modifier.size(29.dp)) }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(2.dp))
-                Text(state?.artist.orEmpty(), color = secondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(3.dp))
+                Text(state?.artist.orEmpty(), color = secondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(20.dp))
+            IconButton(onClick = onPrev, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(22.dp))
             }
             IconButton(
                 onClick = {
                     if (duration > 0L) onSeek((safePosition - 10_000L).coerceAtLeast(0L))
                 },
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(19.dp))
+                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(21.dp))
             }
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(38.dp).clip(CircleShape).background(DashboardYellow)
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(DashboardYellow)
             ) {
                 Icon(
                     if (state?.isPlaying == true) Icons.Default.Pause else Icons.Default.PlayArrow,
                     "Play or pause",
                     tint = Color.Black,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(25.dp)
                 )
             }
             IconButton(
                 onClick = {
                     if (duration > 0L) onSeek((safePosition + 10_000L).coerceAtMost(duration))
                 },
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(19.dp))
+                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(21.dp))
             }
-            IconButton(onClick = onNext, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(20.dp))
+            IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(22.dp))
             }
         }
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(elapsedLabel, color = secondary, fontSize = 8.sp)
+            Text(elapsedLabel, color = secondary, fontSize = 10.sp)
             Slider(
                 value = if (duration > 0) (safePosition.toFloat() / duration).coerceIn(0f, 1f) else 0f,
                 onValueChange = {
@@ -357,9 +357,9 @@ private fun DashboardMusicCard(
                     disabledActiveTrackColor = secondary.copy(alpha = 0.18f),
                     disabledInactiveTrackColor = secondary.copy(alpha = 0.12f)
                 ),
-                modifier = Modifier.weight(1f).padding(horizontal = 5.dp).height(20.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 7.dp).height(24.dp)
             )
-            Text(durationLabel, color = secondary, fontSize = 8.sp)
+            Text(durationLabel, color = secondary, fontSize = 10.sp)
         }
     }
 }
