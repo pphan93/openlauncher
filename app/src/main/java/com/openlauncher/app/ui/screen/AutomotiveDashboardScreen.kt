@@ -7,6 +7,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -338,28 +341,81 @@ private fun DashboardMusicCard(
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(elapsedLabel, color = secondary, fontSize = 10.sp)
-            Slider(
-                value = if (duration > 0) (safePosition.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                onValueChange = {
+            ReferenceSeekBar(
+                progress = if (duration > 0) (safePosition.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                enabled = duration > 0,
+                onProgressChange = {
                     dragging = true
                     position = (duration * it).toLong()
                 },
-                onValueChangeFinished = {
+                onProgressFinished = {
                     if (duration > 0) onSeek(position)
                     dragging = false
                 },
-                enabled = duration > 0,
-                colors = SliderDefaults.colors(
-                    thumbColor = DashboardYellow,
-                    activeTrackColor = DashboardYellow,
-                    inactiveTrackColor = secondary.copy(alpha = 0.18f),
-                    disabledThumbColor = secondary.copy(alpha = 0.28f),
-                    disabledActiveTrackColor = secondary.copy(alpha = 0.18f),
-                    disabledInactiveTrackColor = secondary.copy(alpha = 0.12f)
-                ),
-                modifier = Modifier.weight(1f).padding(horizontal = 7.dp).height(24.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
             )
             Text(durationLabel, color = secondary, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun ReferenceSeekBar(
+    progress: Float,
+    enabled: Boolean,
+    onProgressChange: (Float) -> Unit,
+    onProgressFinished: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    Canvas(
+        modifier = modifier.height(24.dp).pointerInput(enabled) {
+            if (!enabled) return@pointerInput
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                fun update(x: Float) {
+                    onProgressChange((x / size.width.toFloat()).coerceIn(0f, 1f))
+                }
+                update(down.position.x)
+                down.consume()
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change != null) {
+                        update(change.position.x)
+                        change.consume()
+                    }
+                } while (change?.pressed == true)
+                onProgressFinished()
+            }
+        }
+    ) {
+        val centerY = size.height / 2f
+        val trackStart = 5.dp.toPx()
+        val trackEnd = size.width - 5.dp.toPx()
+        val thumbX = trackStart + (trackEnd - trackStart) * clampedProgress
+        val trackWidth = 3.dp.toPx()
+
+        drawLine(
+            color = Color.Black.copy(alpha = 0.78f),
+            start = Offset(trackStart, centerY),
+            end = Offset(trackEnd, centerY),
+            strokeWidth = trackWidth,
+            cap = StrokeCap.Round
+        )
+        if (enabled) {
+            drawLine(
+                color = DashboardYellow,
+                start = Offset(trackStart, centerY),
+                end = Offset(thumbX, centerY),
+                strokeWidth = trackWidth,
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = DashboardYellow,
+                radius = 5.dp.toPx(),
+                center = Offset(thumbX, centerY)
+            )
         }
     }
 }
