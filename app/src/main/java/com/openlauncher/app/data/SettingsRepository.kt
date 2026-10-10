@@ -19,6 +19,9 @@ class SettingsRepository(private val context: Context) {
 
     private object Keys {
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
+        val PROFILE_NAME       = stringPreferencesKey("profile_name")
+        val PROFILE_IMAGE_URI  = stringPreferencesKey("profile_image_uri")
+        val DASHBOARD_PHOTO_URIS = stringPreferencesKey("dashboard_photo_uris")
         val ACCENT_COLOR       = intPreferencesKey("accent_color")
         val BG_COLOR           = intPreferencesKey("bg_color")
         val FONT_COLOR         = intPreferencesKey("font_color")
@@ -30,6 +33,8 @@ class SettingsRepository(private val context: Context) {
         val UNIT_SYSTEM        = stringPreferencesKey("unit_system")
         val APP_FONT           = stringPreferencesKey("app_font")
         val SHOW_WEATHER       = booleanPreferencesKey("show_weather")
+        val WIDGET_OPACITY = floatPreferencesKey("widget_opacity")
+        val WEATHER_WIDGET_OPACITY_LEGACY = floatPreferencesKey("weather_widget_opacity")
         val MANUAL_WEATHER_LOCATION_NAME = stringPreferencesKey("manual_weather_location_name")
         val MANUAL_WEATHER_LATITUDE = doublePreferencesKey("manual_weather_latitude")
         val MANUAL_WEATHER_LONGITUDE = doublePreferencesKey("manual_weather_longitude")
@@ -108,6 +113,13 @@ class SettingsRepository(private val context: Context) {
 
             return AppSettings(
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
+                profileName    = prefs[Keys.PROFILE_NAME]     ?: defaults.profileName,
+                profileImageUri = prefs[Keys.PROFILE_IMAGE_URI] ?: defaults.profileImageUri,
+                dashboardPhotoUris = prefs[Keys.DASHBOARD_PHOTO_URIS]?.let {
+                    runCatching {
+                        gson.fromJson<List<String>>(it, object : TypeToken<List<String>>() {}.type)
+                    }.getOrNull()
+                } ?: defaults.dashboardPhotoUris,
                 accentColor    = prefs[Keys.ACCENT_COLOR]     ?: defaults.accentColor,
                 backgroundColor = prefs[Keys.BG_COLOR]        ?: defaults.backgroundColor,
                 fontColor      = prefs[Keys.FONT_COLOR]       ?: defaults.fontColor,
@@ -119,6 +131,11 @@ class SettingsRepository(private val context: Context) {
                 unitSystem     = prefs[Keys.UNIT_SYSTEM]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() } ?: defaults.unitSystem,
                 appFont        = prefs[Keys.APP_FONT]?.let { runCatching { AppFont.valueOf(it) }.getOrNull() } ?: defaults.appFont,
                 showWeather    = prefs[Keys.SHOW_WEATHER]     ?: defaults.showWeather,
+                widgetOpacity = (
+                    prefs[Keys.WIDGET_OPACITY]
+                        ?: prefs[Keys.WEATHER_WIDGET_OPACITY_LEGACY]
+                        ?: defaults.widgetOpacity
+                ).coerceIn(0f, 1f),
                 manualWeatherLocationName = prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] ?: defaults.manualWeatherLocationName,
                 manualWeatherLatitude = prefs[Keys.MANUAL_WEATHER_LATITUDE],
                 manualWeatherLongitude = prefs[Keys.MANUAL_WEATHER_LONGITUDE],
@@ -179,6 +196,9 @@ class SettingsRepository(private val context: Context) {
 
     private fun writeSettings(prefs: MutablePreferences, s: AppSettings) {
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
+            prefs[Keys.PROFILE_NAME]       = s.profileName
+            prefs[Keys.PROFILE_IMAGE_URI]  = s.profileImageUri
+            prefs[Keys.DASHBOARD_PHOTO_URIS] = gson.toJson(s.dashboardPhotoUris)
             prefs[Keys.ACCENT_COLOR]       = s.accentColor
             prefs[Keys.BG_COLOR]           = s.backgroundColor
             prefs[Keys.FONT_COLOR]         = s.fontColor
@@ -190,6 +210,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.UNIT_SYSTEM]        = s.unitSystem.name
             prefs[Keys.APP_FONT]           = s.appFont.name
             prefs[Keys.SHOW_WEATHER]       = s.showWeather
+            prefs[Keys.WIDGET_OPACITY] = s.widgetOpacity.coerceIn(0f, 1f)
+            prefs.remove(Keys.WEATHER_WIDGET_OPACITY_LEGACY)
             prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] = s.manualWeatherLocationName
             s.manualWeatherLatitude?.let { prefs[Keys.MANUAL_WEATHER_LATITUDE] = it }
                 ?: prefs.remove(Keys.MANUAL_WEATHER_LATITUDE)

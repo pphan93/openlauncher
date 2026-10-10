@@ -172,6 +172,9 @@ data class ExternalWidgetConfig(
 
 data class AppSettings(
     val vehicleName: String = "MY CAR",
+    val profileName: String = "Driver",
+    val profileImageUri: String = "",
+    val dashboardPhotoUris: List<String> = emptyList(),
     val accentColor: Int = Color.White.toArgb(),
     val backgroundColor: Int = Color.Black.toArgb(),
     val fontColor: Int = Color.White.toArgb(),
@@ -183,6 +186,7 @@ data class AppSettings(
     val unitSystem: UnitSystem = UnitSystem.METRIC,
     val appFont: AppFont = AppFont.JETBRAINS_MONO,
     val showWeather: Boolean = true,
+    val widgetOpacity: Float = 1.0f,
     val manualWeatherLocationName: String = "",
     val manualWeatherLatitude: Double? = null,
     val manualWeatherLongitude: Double? = null,
@@ -197,7 +201,7 @@ data class AppSettings(
     val useGradient: Boolean = false,
     val gradientEndColor: Int = Color.Black.toArgb(),
     val wallpaperDim: Float = 0.55f,
-    val sidebarPosition: SidebarPosition = SidebarPosition.LEFT,
+    val sidebarPosition: SidebarPosition = SidebarPosition.BOTTOM,
     val sidebarScale: Float = 1.0f,
     val bottomBarShortcutsRight: Boolean = false,
     val showAltimeter: Boolean = false,

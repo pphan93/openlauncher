@@ -366,6 +366,7 @@ fun HomeScreen(
                 val isGhost    = w.id == "WEATHER" && weather == null && !editMode
                 val dragDpX    = if (isDragging) with(density) { dragOffsetPx.x.toDp() } else 0.dp
                 val dragDpY    = if (isDragging) with(density) { dragOffsetPx.y.toDp() } else 0.dp
+                val widgetOpacity = settings.widgetOpacity.coerceIn(0f, 1f)
 
                 @OptIn(ExperimentalFoundationApi::class)
                 Box(
@@ -374,13 +375,16 @@ fun HomeScreen(
                         .size(width, height)
                         .zIndex(if (isDragging) 1f else 0f)
                         .clip(WIDGET_RADIUS)
-                        .background(if (isGhost) Color.Transparent else widgetBg)
+                        .background(
+                            if (isGhost) Color.Transparent
+                            else widgetBg.copy(alpha = widgetBg.alpha * widgetOpacity)
+                        )
                         .border(
                             width = if (editMode) 1.5.dp else 1.dp,
                             color = when {
                                 editMode -> accent.copy(alpha = 0.45f)
                                 isGhost  -> Color.Transparent
-                                else     -> widgetBorder
+                                else     -> widgetBorder.copy(alpha = widgetBorder.alpha * widgetOpacity)
                             },
                             shape = WIDGET_RADIUS
                         )
@@ -446,6 +450,7 @@ fun HomeScreen(
                             accent     = accent,
                             metric     = settings.unitSystem.name == "METRIC",
                             isDayMode  = isDayMode,
+                            backgroundOpacity = settings.widgetOpacity,
                             modifier   = Modifier.fillMaxSize()
                         )
                         "NOW_PLAYING" -> NowPlayingWidget(

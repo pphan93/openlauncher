@@ -295,7 +295,9 @@ class MainActivity : ComponentActivity() {
                                 .background(Color.Black.copy(alpha = settings.wallpaperDim)))
                         }
 
-                        val isBottomBar    = settings.sidebarPosition == SidebarPosition.BOTTOM
+                        // The automotive dashboard uses a fixed bottom dock. Shortcut
+                        // add/change/remove/reorder behavior remains in Sidebar.
+                        val isBottomBar    = true
                         val layoutDivColor = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF1A1A1A)
 
                         val sidebarContent: @Composable () -> Unit = {
@@ -347,49 +349,22 @@ class MainActivity : ComponentActivity() {
                                 label    = "pane_transition"
                             ) { destination ->
                                 when (destination) {
-                                    NavDestination.HOME -> HomeScreen(
-                                        settings            = settings,
-                                        weather             = weather,
-                                        nowPlaying          = nowPlaying,
-                                        location            = location,
-                                        bearing             = bearing,
-                                        isWifi              = isWifi,
-                                        isData              = isData,
-                                        isDayMode           = isDayMode,
-                                        onPlayPause         = vm::playPause,
-                                        onNext              = vm::skipNext,
-                                        onPrev              = vm::skipPrev,
-                                        onSeek              = vm::seekTo,
-                                        onAssignCarPlay     = { vm.startCarPlayPicker() },
-                                        onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
-                                        onClearCarPlay      = { vm.clearCarPlayApp() },
-                                        onClearAndroidAuto  = { vm.clearAndroidAutoApp() },
-                                        onAssignPip         = { vm.startPipPicker() },
-                                        onClearPip          = { vm.clearPipApp() },
-                                        onLaunchPip         = { vm.launchApp(settings.pipAppPackage) },
-                                        onTapNowPlaying     = {
+                                    NavDestination.HOME -> AutomotiveDashboardScreen(
+                                        settings = settings,
+                                        weather = weather,
+                                        nowPlaying = nowPlaying,
+                                        location = location,
+                                        bearing = bearing,
+                                        isWifi = isWifi,
+                                        isData = isData,
+                                        isDayMode = isDayMode,
+                                        onPlayPause = vm::playPause,
+                                        onNext = vm::skipNext,
+                                        onPrev = vm::skipPrev,
+                                        onSeek = vm::seekTo,
+                                        onTapNowPlaying = {
                                             vm.launchApp("com.google.android.apps.youtube.music")
-                                        },
-                                        onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
-                                        onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
-                                        onAddWidget         = { id -> vm.addWidget(id) },
-                                        onRemoveWidget      = ::removeWidget,
-                                        appWidgetHost       = appWidgetHost,
-                                        onAddAndroidWidget  = ::beginAddingAndroidWidget,
-                                        onSetClockStyle     = { style -> vm.updateSettings { copy(clockStyle = style) } },
-                                        onSetVitalsAsBars   = { asBars -> vm.updateSettings { copy(vitalsAsBars = asBars) } },
-                                        onSetSpeedometerDigitalOnly = { digital -> vm.updateSettings { copy(speedometerDigitalOnly = digital) } },
-                                        onSetMusicVisualizerStyle = { style -> vm.updateSettings { copy(musicVisualizerStyle = style) } },
-                                        onUpdateSoundPad    = { idx, pad -> vm.updateSoundboardPad(idx, pad) },
-                                        hardwareRadio         = hardwareRadio,
-                                        onLaunchHardwareRadio = { vm.launchHardwareRadioApp() },
-                                        onStopHardwareRadio   = { vm.stopHardwareRadioApp() },
-                                        onRadioSeekUp         = { vm.radioSeekUp() },
-                                        onRadioSeekDown       = { vm.radioSeekDown() },
-                                        onRadioCycleFm        = { vm.radioCycleFm() },
-                                        onRadioSwitchAm       = { vm.radioSwitchAm() },
-                                        onRadioTune           = { band, freq -> vm.radioTune(band, freq) },
-                                        onAssignRadio         = { vm.startRadioPicker() }
+                                        }
                                     )
 
                                     NavDestination.APP_LIBRARY -> AppLibraryScreen(

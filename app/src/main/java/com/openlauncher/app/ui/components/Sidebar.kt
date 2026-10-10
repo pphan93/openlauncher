@@ -98,8 +98,8 @@ fun Sidebar(
     modifier: Modifier = Modifier
 ) {
     val isDayMode    = LocalDayMode.current
-    val accent       = Color(settings.accentColor)
-    val sidebarBg    = if (isDayMode) Color(0xFFE0E0E0) else Color.Black.copy(alpha = 0.4f)
+    val accent       = if (isHorizontal) Color(0xFFF2F400) else Color(settings.accentColor)
+    val sidebarBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF181919)
     val iconInactive = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
     val dividerColor = if (isDayMode) Color(0xFFCCCCCC) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
     val density      = LocalDensity.current
@@ -201,7 +201,7 @@ fun Sidebar(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(68.dp)
                 .background(sidebarBg)
         ) {
             // Shortcuts centred, inset past the edge-pinned nav buttons and
@@ -211,7 +211,7 @@ fun Sidebar(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .fillMaxHeight()
-                    .padding(horizontal = 150.dp)
+                    .padding(horizontal = 190.dp)
                     .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -373,9 +373,10 @@ private fun ShortcutSlot(
                 )
             }
     ) {
-        val iconInactive = if (LocalDayMode.current) Color(0xFF777777) else Color(0xFF3A3A3A)
-        val override = shortcut.customIconOverride
-        when {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            val iconInactive = if (LocalDayMode.current) Color(0xFF777777) else Color(0xFF8B8E89)
+            val override = shortcut.customIconOverride
+            when {
             override != null && override != DefaultShortcutIcon.NONE -> {
                 Icon(
                     imageVector        = override.toIcon(),
@@ -409,6 +410,17 @@ private fun ShortcutSlot(
                     contentDescription = "Add shortcut",
                     tint               = if (LocalDayMode.current) Color(0xFFBBBBBB) else Color(0xFF252525),
                     modifier           = Modifier.size(ICON_SIZE)
+                )
+            }
+            }
+            if (isHorizontal) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = shortcut.label.ifEmpty { "Add" },
+                    color = iconInactive,
+                    fontSize = 7.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -612,24 +624,37 @@ private fun NavButton(
     onClick: () -> Unit
 ) {
     val isDayMode = LocalDayMode.current
-    val activeIconColor = if (isDayMode) Color(0xFF111111) else Color.White
-    val activeBg = if (isDayMode) Color(0xFF000000).copy(alpha = 0.08f) else Color.White.copy(alpha = 0.06f)
+    val activeIconColor = if (isHorizontal) Color.Black else if (isDayMode) Color(0xFF111111) else Color.White
+    val activeBg = if (isHorizontal) Color(0xFFF2F400) else if (isDayMode) Color(0xFF000000).copy(alpha = 0.08f) else Color.White.copy(alpha = 0.06f)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .then(
-                if (isHorizontal) Modifier.fillMaxHeight().width(SLOT_SIZE)
+                if (isHorizontal) Modifier.padding(horizontal = 3.dp, vertical = 7.dp).fillMaxHeight().width(64.dp).clip(RoundedCornerShape(12.dp))
                 else              Modifier.fillMaxWidth().height(SLOT_SIZE)
             )
             .background(if (isActive) activeBg else Color.Transparent)
             .clickable(onClick = onClick)
     ) {
-        Icon(
-            imageVector        = icon,
-            contentDescription = label,
-            tint               = if (isActive) activeIconColor else iconInactive,
-            modifier           = Modifier.size(ICON_SIZE)
-        )
+        if (isHorizontal) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isActive) activeIconColor else iconInactive,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(label, color = if (isActive) activeIconColor else iconInactive, fontSize = 7.sp, maxLines = 1)
+            }
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isActive) activeIconColor else iconInactive,
+                modifier = Modifier.size(ICON_SIZE)
+            )
+        }
     }
 }
 

@@ -84,6 +84,36 @@ fun SettingsScreen(
         }
     }
 
+    val profileImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    it, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            onUpdate { copy(profileImageUri = it.toString()) }
+        }
+    }
+
+    // DocumentsUI includes local storage and installed cloud providers such as
+    // Google Photos and Google Drive, while keeping read access after reboot.
+    val dashboardPhotosPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+            }
+            onUpdate { copy(dashboardPhotoUris = uris.map(Uri::toString)) }
+        }
+    }
+
     val isDayMode = LocalDayMode.current
     val screenBg  = MaterialTheme.colorScheme.background
 
@@ -250,6 +280,70 @@ fun SettingsScreen(
         }
 
         // ── Vehicle Name ─────────────────────────────────────────────────────
+        SettingsSection("Dashboard Profile") {
+            var profileNameInput by remember(settings.profileName) { mutableStateOf(settings.profileName) }
+            SettingsRow(
+                label = "Driver Name",
+                sublabel = "Shown beside the connection status in the top bar",
+                icon = Icons.Default.AccountCircle
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = profileNameInput,
+                        onValueChange = { profileNameInput = it },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 11.sp),
+                        colors = outlinedFieldColors(accent),
+                        modifier = Modifier.width(160.dp)
+                    )
+                    if (profileNameInput != settings.profileName) {
+                        IconButton(
+                            onClick = { onUpdate { copy(profileName = profileNameInput.trim().ifEmpty { "Driver" }) } },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Check, "Save profile name", tint = accent, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+            SettingsDivider()
+            SettingsButton(
+                label = "Profile Photo",
+                sublabel = if (settings.profileImageUri.isEmpty()) "Choose a driver image" else "Driver image selected",
+                icon = Icons.Default.AddAPhoto,
+                accent = accent,
+                onClick = { profileImagePicker.launch(arrayOf("image/*")) }
+            )
+            if (settings.profileImageUri.isNotEmpty()) {
+                TextButton(
+                    onClick = { onUpdate { copy(profileImageUri = "") } },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("REMOVE PROFILE PHOTO", color = Color(0xFF993333), fontSize = 9.sp)
+                }
+            }
+            SettingsDivider()
+            SettingsButton(
+                label = "Dashboard Photos",
+                sublabel = if (settings.dashboardPhotoUris.isEmpty()) {
+                    "Choose local, Google Photos, or Google Drive images"
+                } else {
+                    "${settings.dashboardPhotoUris.size} images in the carousel"
+                },
+                icon = Icons.Default.Collections,
+                accent = accent,
+                onClick = { dashboardPhotosPicker.launch(arrayOf("image/*")) }
+            )
+            if (settings.dashboardPhotoUris.isNotEmpty()) {
+                TextButton(
+                    onClick = { onUpdate { copy(dashboardPhotoUris = emptyList()) } },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("CLEAR DASHBOARD PHOTOS", color = Color(0xFF993333), fontSize = 9.sp)
+                }
+            }
+        }
+
         SettingsSection("Vehicle") {
             var nameInput by remember(settings.vehicleName) { mutableStateOf(settings.vehicleName) }
             SettingsRow(
@@ -278,38 +372,10 @@ fun SettingsScreen(
             SettingsDivider()
 
             SettingsRow(
-                label    = "Sidebar Position",
-                sublabel = when (settings.sidebarPosition) {
-                    SidebarPosition.LEFT   -> "Left side"
-                    SidebarPosition.RIGHT  -> "Right side"
-                    SidebarPosition.BOTTOM -> "Bottom"
-                },
-                icon     = Icons.Default.SwapHoriz
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SidebarPosition.entries.forEach { pos ->
-                        FilterChip(
-                            selected = settings.sidebarPosition == pos,
-                            onClick  = { onUpdate { copy(sidebarPosition = pos) } },
-                            label    = {
-                                Text(
-                                    when (pos) {
-                                        SidebarPosition.LEFT   -> "Left"
-                                        SidebarPosition.RIGHT  -> "Right"
-                                        SidebarPosition.BOTTOM -> "Bottom"
-                                    },
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.5.sp
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent,
-                                selectedLabelColor     = Color.Black
-                            )
-                        )
-                    }
-                }
-            }
+                label = "Navigation Dock",
+                sublabel = "Fixed at the bottom; hold shortcuts to change, remove, or reorder",
+                icon = Icons.Default.Dock
+            ) {}
 
             if (settings.sidebarPosition == SidebarPosition.BOTTOM) {
                 SettingsDivider()
@@ -520,6 +586,28 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+
+            SettingsDivider()
+
+            Column {
+                SettingsRow(
+                    label = "Widget Transparency",
+                    sublabel = if (settings.widgetOpacity == 0f) {
+                        "All widget backgrounds fully transparent"
+                    } else {
+                        "${"%.0f".format(settings.widgetOpacity * 100)}% background opacity for all widgets"
+                    },
+                    icon = Icons.Default.Opacity
+                ) {}
+                Slider(
+                    value = settings.widgetOpacity,
+                    onValueChange = { opacity -> onUpdate { copy(widgetOpacity = opacity) } },
+                    valueRange = 0f..1f,
+                    steps = 9,
+                    colors = sliderColors(accent),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                )
             }
 
             SettingsDivider()
