@@ -371,6 +371,37 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            var plateInput by remember(settings.licensePlate) { mutableStateOf(settings.licensePlate) }
+            SettingsRow(
+                label = "License Plate",
+                sublabel = "Shown on the vehicle card",
+                icon = Icons.Default.Badge
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedTextField(
+                        value = plateInput,
+                        onValueChange = { input ->
+                            plateInput = input.uppercase().filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(12)
+                        },
+                        placeholder = { Text("ABC 123", color = if (isDayMode) Color(0xFF999999) else Color(0xFF444444), fontSize = 12.sp) },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = if (isDayMode) Color(0xFF111111) else Color.White),
+                        colors = outlinedFieldColors(accent),
+                        modifier = Modifier.width(140.dp)
+                    )
+                    if (plateInput != settings.licensePlate) {
+                        IconButton(
+                            onClick = { onUpdate { copy(licensePlate = plateInput.trim()) } },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Check, "Save license plate", tint = accent, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            SettingsDivider()
+
             SettingsRow(
                 label = "Navigation Dock",
                 sublabel = "Fixed at the bottom; hold shortcuts to change, remove, or reorder",

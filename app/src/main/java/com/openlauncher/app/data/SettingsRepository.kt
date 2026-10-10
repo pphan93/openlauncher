@@ -19,6 +19,7 @@ class SettingsRepository(private val context: Context) {
 
     private object Keys {
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
+        val LICENSE_PLATE      = stringPreferencesKey("license_plate")
         val PROFILE_NAME       = stringPreferencesKey("profile_name")
         val PROFILE_IMAGE_URI  = stringPreferencesKey("profile_image_uri")
         val DASHBOARD_PHOTO_URIS = stringPreferencesKey("dashboard_photo_uris")
@@ -113,6 +114,7 @@ class SettingsRepository(private val context: Context) {
 
             return AppSettings(
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
+                licensePlate   = prefs[Keys.LICENSE_PLATE]     ?: defaults.licensePlate,
                 profileName    = prefs[Keys.PROFILE_NAME]     ?: defaults.profileName,
                 profileImageUri = prefs[Keys.PROFILE_IMAGE_URI] ?: defaults.profileImageUri,
                 dashboardPhotoUris = prefs[Keys.DASHBOARD_PHOTO_URIS]?.let {
@@ -196,6 +198,7 @@ class SettingsRepository(private val context: Context) {
 
     private fun writeSettings(prefs: MutablePreferences, s: AppSettings) {
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
+            prefs[Keys.LICENSE_PLATE]      = s.licensePlate
             prefs[Keys.PROFILE_NAME]       = s.profileName
             prefs[Keys.PROFILE_IMAGE_URI]  = s.profileImageUri
             prefs[Keys.DASHBOARD_PHOTO_URIS] = gson.toJson(s.dashboardPhotoUris)

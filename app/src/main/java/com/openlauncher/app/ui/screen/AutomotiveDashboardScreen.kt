@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -138,6 +139,8 @@ fun AutomotiveDashboardScreen(
             )
 
             VehicleStatusCard(
+                vehicleName = settings.vehicleName,
+                licensePlate = settings.licensePlate,
                 location = location,
                 bearing = bearing,
                 metric = settings.unitSystem.name == "METRIC",
@@ -464,6 +467,8 @@ private fun PhotoCarouselCard(
 
 @Composable
 private fun VehicleStatusCard(
+    vehicleName: String,
+    licensePlate: String,
     location: LocationData?,
     bearing: Float,
     metric: Boolean,
@@ -473,63 +478,122 @@ private fun VehicleStatusCard(
     modifier: Modifier = Modifier
 ) {
     val heading = compassHeading(bearing)
+    val speed = ((location?.speedMps ?: 0f) * if (metric) 3.6f else 2.23694f).coerceAtLeast(0f)
+    val speedUnit = if (metric) "km/h" else "mph"
+    val rangeUnit = if (metric) "km" else "mi"
 
     Column(
-        modifier = modifier.clip(DashboardRadius).background(cardColor).padding(horizontal = 12.dp, vertical = 11.dp),
+        modifier = modifier.clip(DashboardRadius).background(cardColor).padding(9.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text("2019 CAMRY LE", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text("TOYOTA", color = secondary, fontSize = 7.sp, letterSpacing = 1.4.sp)
+        Text(
+            vehicleName.ifBlank { "2019 CAMRY LE" },
+            color = secondary,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 1.1.sp,
+            maxLines = 1
+        )
+        Text(
+            speed.roundToInt().toString(),
+            color = primary,
+            fontSize = 46.sp,
+            fontWeight = FontWeight.Light,
+            lineHeight = 48.sp
+        )
+        Text(speedUnit, color = secondary, fontSize = 11.sp, fontWeight = FontWeight.Light)
+
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF101522), Color(0xFF1B2030), Color(0xFF080C14))
+                    )
+                )
+        ) {
+            Canvas(Modifier.matchParentSize()) {
+                val horizon = size.height * 0.38f
+                drawLine(
+                    color = Color(0xFF5863E8).copy(alpha = 0.68f),
+                    start = Offset(size.width * 0.42f, horizon),
+                    end = Offset(size.width * 0.04f, size.height),
+                    strokeWidth = 1.4.dp.toPx()
+                )
+                drawLine(
+                    color = Color(0xFF5863E8).copy(alpha = 0.68f),
+                    start = Offset(size.width * 0.58f, horizon),
+                    end = Offset(size.width * 0.96f, size.height),
+                    strokeWidth = 1.4.dp.toPx()
+                )
+            }
+            Image(
+                painter = painterResource(R.drawable.camry_2019_le_black_rear),
+                contentDescription = "Rear view of black 2019 Toyota Camry LE",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth(0.92f).align(Alignment.BottomCenter)
+            )
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 68.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFFE9EAEC))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    licensePlate.ifBlank { "ADD PLATE" },
+                    color = Color(0xFF17191C),
+                    fontSize = 5.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1
+                )
+            }
         }
 
-        Image(
-            painter = painterResource(R.drawable.camry_2019_le_black_front),
-            contentDescription = "Black 2019 Toyota Camry LE",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().weight(0.95f).padding(vertical = 3.dp)
-        )
-
-        Box(modifier = Modifier.fillMaxWidth().height(96.dp)) {
-            VehicleMetricGauge(
-                Icons.Outlined.WaterDrop,
-                "FUEL",
-                "--%",
-                0f,
-                Color(0xFF79CCFA),
-                primary,
-                secondary,
-                Modifier.align(Alignment.BottomStart)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
+                .clip(RoundedCornerShape(11.dp)).background(Color(0xFF111722)).padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.WaterDrop, null, tint = Color(0xFF43E6B0), modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("FUEL  --%", color = primary, fontSize = 9.sp, fontWeight = FontWeight.Medium)
+            Box(
+                Modifier.padding(horizontal = 9.dp).weight(1f).height(3.dp)
+                    .clip(CircleShape).background(secondary.copy(alpha = 0.16f))
             )
-            VehicleMetricGauge(
-                Icons.Outlined.Explore,
-                "COMPASS",
-                "${bearing.roundToInt()}° $heading",
-                bearing / 360f,
-                Color(0xFF95E6B2),
-                primary,
-                secondary,
-                Modifier.align(Alignment.TopCenter)
-            )
-            VehicleMetricGauge(
-                Icons.Outlined.Route,
-                "RANGE",
-                "--",
-                0f,
-                Color(0xFF79CCFA),
-                primary,
-                secondary,
-                Modifier.align(Alignment.BottomEnd)
-            )
+            Text("RANGE  -- $rangeUnit", color = primary, fontSize = 9.sp, fontWeight = FontWeight.Medium)
         }
 
-        VehicleSpeedometerGauge(
-            location = location,
-            metric = metric,
-            primary = primary,
-            secondary = secondary,
-            modifier = Modifier.fillMaxWidth().weight(1.25f)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
+                .clip(RoundedCornerShape(11.dp)).background(Color(0xFF111722)).padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            VehicleStatusItem(Icons.Default.Lock, "DOORS", "NO DATA", Color(0xFF7ACBFA), primary, secondary)
+            VerticalDivider(Modifier.height(36.dp), color = secondary.copy(alpha = 0.14f))
+            VehicleStatusItem(Icons.Outlined.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", Color(0xFFAD80FF), primary, secondary)
+            VerticalDivider(Modifier.height(36.dp), color = secondary.copy(alpha = 0.14f))
+            VehicleStatusItem(Icons.Default.LocalGasStation, "FUEL SIDE", "LEFT", Color(0xFF55D893), primary, secondary)
+        }
+    }
+}
+
+@Composable
+private fun VehicleStatusItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    accent: Color,
+    primary: Color,
+    secondary: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
+        Icon(icon, null, tint = primary, modifier = Modifier.size(17.dp))
+        Spacer(Modifier.height(3.dp))
+        Text(label, color = primary, fontSize = 7.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(value, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 

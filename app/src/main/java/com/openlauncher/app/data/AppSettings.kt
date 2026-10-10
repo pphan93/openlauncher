@@ -172,6 +172,7 @@ data class ExternalWidgetConfig(
 
 data class AppSettings(
     val vehicleName: String = "MY CAR",
+    val licensePlate: String = "",
     val profileName: String = "Driver",
     val profileImageUri: String = "",
     val dashboardPhotoUris: List<String> = emptyList(),
