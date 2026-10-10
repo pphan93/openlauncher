@@ -420,44 +420,17 @@ private fun VehicleStatusCard(
         modifier = modifier.clip(DashboardRadius).background(cardColor).padding(horizontal = 12.dp, vertical = 11.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text("2019 CAMRY LE", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("TOYOTA", color = secondary, fontSize = 7.sp, letterSpacing = 1.4.sp)
-            }
-            Surface(
-                shape = CircleShape,
-                color = secondary.copy(alpha = 0.08f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, secondary.copy(alpha = 0.12f))
-            ) {
-                Icon(
-                    Icons.Default.Sync,
-                    contentDescription = "Refresh vehicle status",
-                    tint = secondary,
-                    modifier = Modifier.padding(8.dp).size(14.dp)
-                )
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("2019 CAMRY LE", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("TOYOTA", color = secondary, fontSize = 7.sp, letterSpacing = 1.4.sp)
         }
 
         Image(
-            painter = painterResource(R.drawable.camry_2019_le_black),
+            painter = painterResource(R.drawable.camry_2019_le_black_front),
             contentDescription = "Black 2019 Toyota Camry LE",
             contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().weight(0.9f).padding(vertical = 3.dp)
+            modifier = Modifier.fillMaxWidth().weight(0.95f).padding(vertical = 3.dp)
         )
-
-        Row(
-            modifier = Modifier.padding(bottom = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(primary.copy(alpha = 0.8f)))
-            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(secondary.copy(alpha = 0.18f)))
-            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(secondary.copy(alpha = 0.18f)))
-        }
 
         Row(
             modifier = Modifier.fillMaxWidth().height(82.dp),
