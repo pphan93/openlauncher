@@ -49,6 +49,7 @@ import kotlin.math.roundToInt
 
 private val ICON_SIZE   = 22.dp
 private val SLOT_SIZE   = 52.dp
+private val HORIZONTAL_SLOT_SIZE = 88.dp
 
 /** A theme-tintable CarPlay-style mark: an open circular ring around Play. */
 private val CarPlayIcon: ImageVector = ImageVector.Builder(
@@ -100,10 +101,12 @@ fun Sidebar(
     val isDayMode    = LocalDayMode.current
     val accent       = if (isHorizontal) Color(0xFFF2F400) else Color(settings.accentColor)
     val sidebarBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF181919)
-    val iconInactive = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+    val iconInactive = if (isDayMode) Color(0xFF777777) else Color(0xFFB4B7B2)
     val dividerColor = if (isDayMode) Color(0xFFCCCCCC) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
     val density      = LocalDensity.current
-    val slotSizePx   = with(density) { SLOT_SIZE.toPx() }
+    val slotSizePx   = with(density) {
+        (if (isHorizontal) HORIZONTAL_SLOT_SIZE else SLOT_SIZE).toPx()
+    }
 
     var actionSheetSlot by remember { mutableStateOf<Int?>(null) }
     var iconPickerSlot  by remember { mutableStateOf<Int?>(null) }
@@ -130,8 +133,9 @@ fun Sidebar(
         }
     }
 
-    val shortcutsContent: @Composable () -> Unit = {
-        settings.shortcuts.forEachIndexed { index, shortcut ->
+    val shortcutsContent: @Composable (List<Int>) -> Unit = { indices ->
+        indices.forEach { index ->
+            val shortcut = settings.shortcuts[index]
             val isDragging  = (index == draggingIndex)
             val translation = if (isDragging) dragOffsetPx else slotTranslation(index)
 
@@ -201,8 +205,9 @@ fun Sidebar(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(68.dp)
-                .background(sidebarBg)
+                .height(84.dp)
+                .background(if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A))
+                .padding(horizontal = 24.dp, vertical = 7.dp)
         ) {
             // Shortcuts centred, inset past the edge-pinned nav buttons and
             // scrollable — an unbounded row ran beneath the nav buttons and off
@@ -210,31 +215,28 @@ fun Sidebar(
             Row(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .fillMaxHeight()
-                    .padding(horizontal = 190.dp)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(sidebarBg)
                     .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                shortcutsContent()
+                val splitIndex = minOf(2, settings.shortcuts.size)
+                shortcutsContent((0 until splitIndex).toList())
+                NavButton(Icons.Default.Apps, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
+                    onNavigate(NavDestination.APP_LIBRARY)
+                }
+                NavButton(Icons.Default.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true) {
+                    onNavigate(NavDestination.HOME)
+                }
+                shortcutsContent((splitIndex until settings.shortcuts.size).toList())
+                NavButton(Icons.Default.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true) {
+                    onNavigate(NavDestination.SETTINGS)
+                }
             }
 
             // Nav buttons pinned to one edge, Home always outermost
-            Row(
-                modifier = Modifier
-                    .align(if (settings.bottomBarShortcutsRight) Alignment.CenterEnd else Alignment.CenterStart)
-                    .fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!settings.bottomBarShortcutsRight) {
-                    NavButton(Icons.Default.Home,     "Home",     currentDest == NavDestination.HOME,        accent, iconInactive, true) { onNavigate(NavDestination.HOME) }
-                    NavButton(Icons.Default.Settings, "Settings", currentDest == NavDestination.SETTINGS,    accent, iconInactive, true) { onNavigate(NavDestination.SETTINGS) }
-                    NavButton(Icons.Default.Apps,     "Apps",     currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) { onNavigate(NavDestination.APP_LIBRARY) }
-                } else {
-                    NavButton(Icons.Default.Apps,     "Apps",     currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) { onNavigate(NavDestination.APP_LIBRARY) }
-                    NavButton(Icons.Default.Settings, "Settings", currentDest == NavDestination.SETTINGS,    accent, iconInactive, true) { onNavigate(NavDestination.SETTINGS) }
-                    NavButton(Icons.Default.Home,     "Home",     currentDest == NavDestination.HOME,        accent, iconInactive, true) { onNavigate(NavDestination.HOME) }
-                }
-            }
         }
     } else {
         Column(
@@ -252,7 +254,7 @@ fun Sidebar(
                     .padding(top = 6.dp, bottom = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                shortcutsContent()
+                shortcutsContent(settings.shortcuts.indices.toList())
             }
 
             HorizontalDivider(color = dividerColor)
@@ -325,7 +327,7 @@ private fun ShortcutSlot(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .then(
-                if (isHorizontal) Modifier.fillMaxHeight().width(SLOT_SIZE)
+                if (isHorizontal) Modifier.fillMaxHeight().width(HORIZONTAL_SLOT_SIZE)
                 else              Modifier.fillMaxWidth().height(SLOT_SIZE)
             )
             .zIndex(if (isDragging) 1f else 0f)
@@ -630,7 +632,7 @@ private fun NavButton(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .then(
-                if (isHorizontal) Modifier.padding(horizontal = 3.dp, vertical = 7.dp).fillMaxHeight().width(64.dp).clip(RoundedCornerShape(12.dp))
+                if (isHorizontal) Modifier.padding(horizontal = 4.dp, vertical = 7.dp).fillMaxHeight().width(HORIZONTAL_SLOT_SIZE).clip(RoundedCornerShape(14.dp))
                 else              Modifier.fillMaxWidth().height(SLOT_SIZE)
             )
             .background(if (isActive) activeBg else Color.Transparent)

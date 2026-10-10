@@ -227,10 +227,10 @@ data class AppSettings(
 )
 
 fun defaultShortcuts() = listOf(
-    ShortcutConfig(label = "Radio", isDefault = true, defaultIcon = DefaultShortcutIcon.RADIO),
+    ShortcutConfig(label = "Menu", isDefault = true, defaultIcon = DefaultShortcutIcon.CAR),
+    ShortcutConfig(label = "Direction", isDefault = true, defaultIcon = DefaultShortcutIcon.NAVIGATION),
     ShortcutConfig(label = "Camera", isDefault = true, defaultIcon = DefaultShortcutIcon.CAMERA),
-    ShortcutConfig(label = "Music", isDefault = true, defaultIcon = DefaultShortcutIcon.MUSIC),
-    ShortcutConfig(label = "Phone", isDefault = true, defaultIcon = DefaultShortcutIcon.PHONE)
+    ShortcutConfig(label = "Media", isDefault = true, defaultIcon = DefaultShortcutIcon.MUSIC)
 )
 
 fun defaultWidgetLayout() = listOf(
