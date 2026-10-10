@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -36,13 +41,14 @@ import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.ui.widget.WeatherGlyph
-import com.openlauncher.app.ui.widget.SpeedometerWidget
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private val DashboardYellow = Color(0xFFF2F400)
 private val DashboardDarkBackground = Color(0xFF090A0A)
@@ -435,21 +441,45 @@ private fun VehicleStatusCard(
             modifier = Modifier.fillMaxWidth().weight(0.95f).padding(vertical = 3.dp)
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth().height(82.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            VehicleMetricGauge(Icons.Default.LocalGasStation, "FUEL", "--%", 0f, Color(0xFF79CCFA), primary, secondary)
-            VehicleMetricGauge(Icons.Default.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", bearing / 360f, Color(0xFF95E6B2), primary, secondary)
-            VehicleMetricGauge(Icons.Default.Route, "RANGE", "--", 0f, Color(0xFF79CCFA), primary, secondary)
+        Box(modifier = Modifier.fillMaxWidth().height(96.dp)) {
+            VehicleMetricGauge(
+                Icons.Outlined.WaterDrop,
+                "FUEL",
+                "--%",
+                0f,
+                Color(0xFF79CCFA),
+                primary,
+                secondary,
+                Modifier.align(Alignment.BottomStart)
+            )
+            VehicleMetricGauge(
+                Icons.Outlined.Explore,
+                "COMPASS",
+                "${bearing.roundToInt()}° $heading",
+                bearing / 360f,
+                Color(0xFF95E6B2),
+                primary,
+                secondary,
+                Modifier.align(Alignment.TopCenter)
+            )
+            VehicleMetricGauge(
+                Icons.Outlined.Route,
+                "RANGE",
+                "--",
+                0f,
+                Color(0xFF79CCFA),
+                primary,
+                secondary,
+                Modifier.align(Alignment.BottomEnd)
+            )
         }
 
-        SpeedometerWidget(
+        VehicleSpeedometerGauge(
             location = location,
-            isMetric = metric,
-            accent = Color(0xFF79CCFA),
-            isDayMode = primary != Color.White,
-            modifier = Modifier.fillMaxWidth().weight(1.12f)
+            metric = metric,
+            primary = primary,
+            secondary = secondary,
+            modifier = Modifier.fillMaxWidth().weight(1.25f)
         )
     }
 }
@@ -462,9 +492,10 @@ private fun VehicleMetricGauge(
     progress: Float,
     accent: Color,
     primary: Color,
-    secondary: Color
+    secondary: Color,
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.size(76.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.size(78.dp), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 2.dp.toPx()
             val inset = 7.dp.toPx()
@@ -491,9 +522,130 @@ private fun VehicleMetricGauge(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = accent, modifier = Modifier.size(13.dp))
-            Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(label, color = secondary, fontSize = 6.sp)
+            Icon(icon, null, tint = accent, modifier = Modifier.size(12.dp))
+            Text(value, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(label, color = secondary, fontSize = 7.sp)
+        }
+    }
+}
+
+@Composable
+private fun VehicleSpeedometerGauge(
+    location: LocationData?,
+    metric: Boolean,
+    primary: Color,
+    secondary: Color,
+    modifier: Modifier = Modifier
+) {
+    val speed = ((location?.speedMps ?: 0f) * if (metric) 3.6f else 2.23694f).coerceAtLeast(0f)
+    val maxSpeed = if (metric) 200f else 120f
+    val accent = Color(0xFF79CCFA)
+    val progress = (speed / maxSpeed).coerceIn(0f, 1f)
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height * 0.51f)
+            val radius = minOf(size.width * 0.46f, size.height * 0.46f)
+            val startAngle = 150f
+            val sweepAngle = 240f
+            val bounds = Size(radius * 2f, radius * 2f)
+            val topLeft = Offset(center.x - radius, center.y - radius)
+
+            drawArc(
+                color = secondary.copy(alpha = 0.18f),
+                startAngle = startAngle,
+                sweepAngle = sweepAngle,
+                useCenter = false,
+                topLeft = topLeft,
+                size = bounds,
+                style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+            if (progress > 0f) {
+                drawArc(
+                    color = accent.copy(alpha = 0.18f),
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle * progress,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = bounds,
+                    style = Stroke(8.dp.toPx(), cap = StrokeCap.Round)
+                )
+                drawArc(
+                    color = accent,
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle * progress,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = bounds,
+                    style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+
+            val tickCount = 50
+            for (index in 0..tickCount) {
+                val fraction = index / tickCount.toFloat()
+                val angle = startAngle + sweepAngle * fraction
+                val radians = Math.toRadians(angle.toDouble())
+                val isMajor = index % 5 == 0
+                val outerRadius = radius - 7.dp.toPx()
+                val innerRadius = outerRadius - if (isMajor) 13.dp.toPx() else 6.dp.toPx()
+                val tickColor = if (fraction <= progress && progress > 0f) accent else secondary.copy(alpha = if (isMajor) 0.32f else 0.18f)
+                drawLine(
+                    color = tickColor,
+                    start = Offset(
+                        center.x + (outerRadius * cos(radians)).toFloat(),
+                        center.y + (outerRadius * sin(radians)).toFloat()
+                    ),
+                    end = Offset(
+                        center.x + (innerRadius * cos(radians)).toFloat(),
+                        center.y + (innerRadius * sin(radians)).toFloat()
+                    ),
+                    strokeWidth = if (isMajor) 1.7.dp.toPx() else 1.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+
+            val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = primary.toArgb()
+                textAlign = android.graphics.Paint.Align.CENTER
+                textSize = 8.sp.toPx()
+                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            }
+            val labelRadius = radius * 0.66f
+            for (step in 1..9) {
+                val value = maxSpeed * step / 10f
+                val angle = startAngle + sweepAngle * (value / maxSpeed)
+                val radians = Math.toRadians(angle.toDouble())
+                val x = center.x + (labelRadius * cos(radians)).toFloat()
+                val y = center.y + (labelRadius * sin(radians)).toFloat() - (labelPaint.ascent() + labelPaint.descent()) / 2f
+                drawContext.canvas.nativeCanvas.drawText(value.roundToInt().toString(), x, y, labelPaint)
+            }
+
+            drawCircle(
+                color = secondary.copy(alpha = 0.16f),
+                radius = radius * 0.31f,
+                center = center,
+                style = Stroke(1.dp.toPx())
+            )
+            drawArc(
+                color = accent,
+                startAngle = 65f,
+                sweepAngle = 50f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius * 0.54f, center.y - radius * 0.54f),
+                size = Size(radius * 1.08f, radius * 1.08f),
+                style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                speed.roundToInt().toString(),
+                color = primary,
+                fontSize = 27.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(if (metric) "km/h" else "mph", color = secondary, fontSize = 8.sp)
         }
     }
 }
