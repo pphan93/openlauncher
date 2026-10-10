@@ -54,7 +54,6 @@ import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.ui.theme.Poppins
-import com.openlauncher.app.ui.widget.WeatherGlyph
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -468,19 +467,16 @@ private fun DashboardWeatherClimateCard(
                 Text(state?.temperatureDisplay(metric) ?: "--°", color = primary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text("Outdoor temperature", color = secondary, fontSize = 8.sp)
             }
-            WeatherGlyph(
+            DashboardWeatherIcon(
                 weatherCode = state?.weatherCode ?: 3,
                 isDay = state?.isDay ?: true,
-                color = primary,
-                accent = DashboardYellow,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(46.dp)
             )
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                .background(secondary.copy(alpha = 0.055f)).padding(horizontal = 5.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (upcomingForecast.isEmpty()) {
@@ -518,21 +514,110 @@ private fun DashboardForecastDay(
     secondary: Color,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(day.dayLabel, color = secondary, fontSize = 7.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(3.dp))
-        WeatherGlyph(
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(9.dp))
+            .background(secondary.copy(alpha = 0.07f)).padding(horizontal = 3.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(day.dayLabel, color = secondary, fontSize = 7.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp)
+        Spacer(Modifier.height(2.dp))
+        DashboardWeatherIcon(
             weatherCode = day.weatherCode,
             isDay = true,
-            color = primary,
-            accent = DashboardYellow,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(28.dp)
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(3.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(day.maximumDisplay(metric), color = primary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+            Text(day.maximumDisplay(metric), color = primary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(4.dp))
             Text(day.minimumDisplay(metric), color = secondary, fontSize = 7.sp)
+        }
+    }
+}
+
+@Composable
+private fun DashboardWeatherIcon(
+    weatherCode: Int,
+    isDay: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier) {
+        val yellow = Color(0xFFFFD83D)
+        val cloud = Color(0xFFF0F3F6)
+        val cloudShade = Color(0xFFB8C3CE)
+        val rain = Color(0xFF68C7FF)
+        val snow = Color(0xFFCDEEFF)
+
+        fun drawSun(center: Offset = Offset(size.width * 0.34f, size.height * 0.34f), radius: Float = size.minDimension * 0.17f) {
+            drawCircle(yellow, radius, center)
+            repeat(8) { index ->
+                val angle = Math.toRadians(index * 45.0)
+                val inner = radius * 1.35f
+                val outer = radius * 1.72f
+                drawLine(
+                    yellow,
+                    Offset(center.x + cos(angle).toFloat() * inner, center.y + sin(angle).toFloat() * inner),
+                    Offset(center.x + cos(angle).toFloat() * outer, center.y + sin(angle).toFloat() * outer),
+                    strokeWidth = size.minDimension * 0.055f,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+
+        fun drawFilledCloud() {
+            val shape = Path().apply {
+                moveTo(size.width * 0.16f, size.height * 0.69f)
+                cubicTo(size.width * 0.05f, size.height * 0.67f, size.width * 0.05f, size.height * 0.48f, size.width * 0.23f, size.height * 0.45f)
+                cubicTo(size.width * 0.29f, size.height * 0.22f, size.width * 0.61f, size.height * 0.18f, size.width * 0.72f, size.height * 0.42f)
+                cubicTo(size.width * 0.92f, size.height * 0.39f, size.width * 0.99f, size.height * 0.66f, size.width * 0.79f, size.height * 0.70f)
+                lineTo(size.width * 0.16f, size.height * 0.70f)
+                close()
+            }
+            drawPath(shape, cloudShade)
+            drawPath(shape, cloud.copy(alpha = 0.92f), style = Stroke(size.minDimension * 0.025f, cap = StrokeCap.Round))
+        }
+
+        when (weatherCode) {
+            0 -> if (isDay) {
+                drawSun(center = center, radius = size.minDimension * 0.22f)
+            } else {
+                drawCircle(Color(0xFFFFF1A8), size.minDimension * 0.25f, center)
+                drawCircle(Color(0xFF181919), size.minDimension * 0.23f, Offset(center.x + size.width * 0.12f, center.y - size.height * 0.08f))
+            }
+            1, 2 -> {
+                drawSun()
+                drawFilledCloud()
+            }
+            45, 48 -> {
+                drawFilledCloud()
+                repeat(2) { index ->
+                    val y = size.height * (0.80f + index * 0.12f)
+                    drawLine(cloudShade, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), size.minDimension * 0.055f, StrokeCap.Round)
+                }
+            }
+            51, 53, 55, 61, 63, 65, 80, 81, 82 -> {
+                drawFilledCloud()
+                listOf(0.31f, 0.50f, 0.69f).forEach { x ->
+                    drawLine(rain, Offset(size.width * x, size.height * 0.76f), Offset(size.width * (x - 0.045f), size.height * 0.91f), size.minDimension * 0.07f, StrokeCap.Round)
+                }
+            }
+            71, 73, 75 -> {
+                drawFilledCloud()
+                listOf(0.34f, 0.52f, 0.70f).forEach { x ->
+                    drawCircle(snow, size.minDimension * 0.045f, Offset(size.width * x, size.height * 0.84f))
+                }
+            }
+            95, 96, 99 -> {
+                drawFilledCloud()
+                val bolt = Path().apply {
+                    moveTo(size.width * 0.55f, size.height * 0.69f)
+                    lineTo(size.width * 0.39f, size.height * 0.86f)
+                    lineTo(size.width * 0.53f, size.height * 0.86f)
+                    lineTo(size.width * 0.42f, size.height)
+                }
+                drawPath(bolt, yellow, style = Stroke(size.minDimension * 0.085f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            }
+            else -> drawFilledCloud()
         }
     }
 }

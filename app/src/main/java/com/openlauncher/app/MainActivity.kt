@@ -295,10 +295,7 @@ class MainActivity : ComponentActivity() {
                                 .background(Color.Black.copy(alpha = settings.wallpaperDim)))
                         }
 
-                        // The automotive dashboard uses a fixed bottom dock. Shortcut
-                        // add/change/remove/reorder behavior remains in Sidebar.
-                        val isBottomBar    = true
-                        val layoutDivColor = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF1A1A1A)
+                        val isBottomBar = settings.sidebarPosition == SidebarPosition.BOTTOM
 
                         val sidebarContent: @Composable () -> Unit = {
                             val sidebarDensity = Density(
@@ -408,19 +405,11 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             Row(modifier = Modifier.fillMaxSize()) {
-                                val vDivider: @Composable () -> Unit = {
-                                    androidx.compose.material3.VerticalDivider(
-                                        modifier = Modifier.fillMaxHeight(),
-                                        color    = layoutDivColor
-                                    )
-                                }
                                 if (settings.sidebarPosition == SidebarPosition.LEFT) {
                                     sidebarContent()
-                                    vDivider()
                                 }
                                 mainPane(Modifier.weight(1f).fillMaxHeight())
                                 if (settings.sidebarPosition == SidebarPosition.RIGHT) {
-                                    vDivider()
                                     sidebarContent()
                                 }
                             }

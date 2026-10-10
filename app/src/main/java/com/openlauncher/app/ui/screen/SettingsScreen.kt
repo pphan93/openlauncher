@@ -403,22 +403,28 @@ fun SettingsScreen(
             SettingsDivider()
 
             SettingsRow(
-                label = "Navigation Dock",
-                sublabel = "Fixed at the bottom; hold shortcuts to change, remove, or reorder",
+                label = "Navigation Position",
+                sublabel = if (settings.sidebarPosition == SidebarPosition.LEFT) "Left side" else "Bottom",
                 icon = Icons.Default.Dock
-            ) {}
-
-            if (settings.sidebarPosition == SidebarPosition.BOTTOM) {
-                SettingsDivider()
-                SettingsRow(
-                    label    = "Shortcuts Side",
-                    sublabel = if (settings.bottomBarShortcutsRight) "Right — nav buttons on left" else "Left — nav buttons on right",
-                    icon     = Icons.Default.FormatAlignRight
-                ) {
-                    Switch(
-                        checked         = settings.bottomBarShortcutsRight,
-                        onCheckedChange = { onUpdate { copy(bottomBarShortcutsRight = it) } },
-                        colors          = switchColors(accent)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = settings.sidebarPosition == SidebarPosition.BOTTOM,
+                        onClick = { onUpdate { copy(sidebarPosition = SidebarPosition.BOTTOM) } },
+                        label = { Text("Bottom", fontSize = 10.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = accent,
+                            selectedLabelColor = Color.Black
+                        )
+                    )
+                    FilterChip(
+                        selected = settings.sidebarPosition == SidebarPosition.LEFT,
+                        onClick = { onUpdate { copy(sidebarPosition = SidebarPosition.LEFT) } },
+                        label = { Text("Left", fontSize = 10.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = accent,
+                            selectedLabelColor = Color.Black
+                        )
                     )
                 }
             }
