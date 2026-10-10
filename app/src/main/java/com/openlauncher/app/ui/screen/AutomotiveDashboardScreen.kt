@@ -51,6 +51,7 @@ import androidx.core.content.ContextCompat
 import com.openlauncher.app.R
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.model.NowPlayingState
+import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.ui.widget.WeatherGlyph
@@ -456,6 +457,8 @@ private fun DashboardWeatherClimateCard(
     secondary: Color,
     modifier: Modifier = Modifier
 ) {
+    val upcomingForecast = state?.dailyForecast?.drop(1)?.take(4).orEmpty()
+
     Column(
         modifier = modifier.fillMaxWidth().clip(DashboardRadius).background(cardColor).padding(14.dp),
         verticalArrangement = Arrangement.SpaceBetween
@@ -473,6 +476,28 @@ private fun DashboardWeatherClimateCard(
                 modifier = Modifier.size(40.dp)
             )
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                .background(secondary.copy(alpha = 0.055f)).padding(horizontal = 5.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (upcomingForecast.isEmpty()) {
+                Text("Forecast unavailable", color = secondary, fontSize = 8.sp)
+            } else {
+                upcomingForecast.forEach { day ->
+                    DashboardForecastDay(
+                        day = day,
+                        metric = metric,
+                        primary = primary,
+                        secondary = secondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(secondary.copy(alpha = 0.09f)).padding(6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -482,7 +507,33 @@ private fun DashboardWeatherClimateCard(
             ClimateStatus(Icons.Default.EventSeat, "DRIVER", "OFF", primary, secondary)
             ClimateStatus(Icons.Default.EventSeat, "PASS.", "OFF", primary, secondary)
         }
-        Text("Climate shown as status only • physical controls remain active", color = secondary, fontSize = 7.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun DashboardForecastDay(
+    day: DailyForecast,
+    metric: Boolean,
+    primary: Color,
+    secondary: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(day.dayLabel, color = secondary, fontSize = 7.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(3.dp))
+        WeatherGlyph(
+            weatherCode = day.weatherCode,
+            isDay = true,
+            color = primary,
+            accent = DashboardYellow,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(day.maximumDisplay(metric), color = primary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(4.dp))
+            Text(day.minimumDisplay(metric), color = secondary, fontSize = 7.sp)
+        }
     }
 }
 
