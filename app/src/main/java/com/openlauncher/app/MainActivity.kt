@@ -206,8 +206,7 @@ class MainActivity : ComponentActivity() {
                                         onPlayPause         = vm::playPause,
                                         onNext              = vm::skipNext,
                                         onPrev              = vm::skipPrev,
-                                        onLaunchCarPlay     = { vm.launchApp(settings.carPlayPackage) },
-                                        onLaunchAndroidAuto = { vm.launchApp(settings.androidAutoPackage) },
+                                        onSeek              = vm::seekTo,
                                         onAssignCarPlay     = { vm.startCarPlayPicker() },
                                         onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
                                         onClearCarPlay      = { vm.clearCarPlayApp() },
@@ -216,8 +215,7 @@ class MainActivity : ComponentActivity() {
                                         onClearPip          = { vm.clearPipApp() },
                                         onLaunchPip         = { vm.launchApp(settings.pipAppPackage) },
                                         onTapNowPlaying     = {
-                                            val pkg = nowPlaying?.controller?.packageName
-                                            if (!pkg.isNullOrEmpty()) vm.launchApp(pkg)
+                                            vm.launchApp("com.google.android.apps.youtube.music")
                                         },
                                         onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
                                         onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
@@ -226,6 +224,7 @@ class MainActivity : ComponentActivity() {
                                         onSetClockStyle     = { style -> vm.updateSettings { copy(clockStyle = style) } },
                                         onSetVitalsAsBars   = { asBars -> vm.updateSettings { copy(vitalsAsBars = asBars) } },
                                         onSetSpeedometerDigitalOnly = { digital -> vm.updateSettings { copy(speedometerDigitalOnly = digital) } },
+                                        onSetMusicVisualizerStyle = { style -> vm.updateSettings { copy(musicVisualizerStyle = style) } },
                                         onUpdateSoundPad    = { idx, pad -> vm.updateSoundboardPad(idx, pad) },
                                         hardwareRadio         = hardwareRadio,
                                         onLaunchHardwareRadio = { vm.launchHardwareRadioApp() },

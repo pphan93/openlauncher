@@ -1,6 +1,8 @@
 package com.openlauncher.app.ui.widget
 
 import android.media.MediaMetadata
+import android.media.session.PlaybackState
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -13,11 +15,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Radio
@@ -33,7 +33,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -49,13 +48,10 @@ import kotlinx.coroutines.delay
 fun NowPlayingWidget(
     state: NowPlayingState?,
     accent: Color,
-    carPlayPackage: String,
-    androidAutoPackage: String,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
-    onLaunchCarPlay: () -> Unit,
-    onLaunchAndroidAuto: () -> Unit,
+    onSeek: (Long) -> Unit,
     onTapToOpenApp: () -> Unit,
     modifier: Modifier = Modifier,
     isEditing: Boolean = false,
@@ -70,10 +66,7 @@ fun NowPlayingWidget(
     onRadioTune: (band: String, freq: Float) -> Unit = { _, _ -> },
     onAssignRadio: () -> Unit = {}
 ) {
-    val context     = LocalContext.current
     val isConnected by MediaListenerService.isConnected.collectAsState()
-    val hasCarPlay  = carPlayPackage.isNotEmpty()
-    val hasAutoApp  = androidAutoPackage.isNotEmpty()
     val hasContent  = state != null && state.title.isNotEmpty()
 
     var selectedSource by rememberSaveable { mutableStateOf("Any Player") }
@@ -124,13 +117,10 @@ fun NowPlayingWidget(
                 isEditing = isEditing,
                 isDayMode = isDayMode,
                 isConnected = isConnected,
-                hasCarPlay = hasCarPlay,
-                hasAutoApp = hasAutoApp,
                 onPlayPause = onPlayPause,
                 onNext = onNext,
                 onPrev = onPrev,
-                onLaunchCarPlay = onLaunchCarPlay,
-                onLaunchAndroidAuto = onLaunchAndroidAuto,
+                onSeek = onSeek,
                 onTapToOpenApp = onTapToOpenApp,
                 modifier = Modifier.fillMaxSize()
             )
@@ -518,96 +508,54 @@ private fun StandardMinimalPlayer(
     isEditing: Boolean,
     isDayMode: Boolean,
     isConnected: Boolean,
-    hasCarPlay: Boolean,
-    hasAutoApp: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
-    onLaunchCarPlay: () -> Unit,
-    onLaunchAndroidAuto: () -> Unit,
+    onSeek: (Long) -> Unit,
     onTapToOpenApp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    
     // UI Theme colors
     val idleIconColor = if (isDayMode) Color(0xFF555555) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.30f)
     val idleTextColor = if (isDayMode) Color(0xFF555555) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-    val contentTextColor = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
-    val subTextColor = if (isDayMode) Color(0xFF666666) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.30f)
 
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier.then(
+            if (!isEditing) Modifier.clickable { onTapToOpenApp() } else Modifier
+        )
+    ) {
         if (!hasContent) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                if (hasCarPlay || hasAutoApp) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (hasCarPlay) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .let { if (!isEditing) it.clickable { onLaunchCarPlay() } else it }
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.PhoneAndroid, null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
-                                    Text("CARPLAY", color = accent.copy(alpha = 0.6f), fontSize = 8.sp, letterSpacing = 2.sp)
-                                }
-                            }
-                        }
-                        if (hasCarPlay && hasAutoApp) {
-                            androidx.compose.material3.VerticalDivider(
-                                modifier = Modifier.fillMaxHeight().padding(vertical = 16.dp),
-                                color = if (isDayMode) Color(0xFFBBBBBB) else Color(0xFF1E1E1E)
-                            )
-                        }
-                        if (hasAutoApp) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .let { if (!isEditing) it.clickable { onLaunchAndroidAuto() } else it }
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.DirectionsCar, null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
-                                    Text("ANDROID AUTO", color = accent.copy(alpha = 0.6f), fontSize = 8.sp, letterSpacing = 2.sp)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(Icons.Default.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(24.dp))
-                        Text("NO MEDIA PLAYING", color = idleTextColor, fontSize = 7.sp, letterSpacing = 1.sp)
-                    }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(24.dp))
+                    Text("OPEN YOUTUBE MUSIC", color = idleTextColor, fontSize = 7.sp, letterSpacing = 1.sp)
                 }
             }
         } else {
             // Non-null playing track state
             val nonNullState = state!!
-            var positionMs by remember { mutableLongStateOf(nonNullState.controller?.playbackState?.position ?: 0L) }
+            val controller = nonNullState.controller
+            val sessionToken = controller?.sessionToken
+            var positionMs by remember(sessionToken, nonNullState.title) {
+                mutableLongStateOf(currentPlaybackPosition(controller?.playbackState))
+            }
+            var isSeeking by remember(sessionToken, nonNullState.title) { mutableStateOf(false) }
             val durationMs = nonNullState.controller?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+            val canSeek = ((controller?.playbackState?.actions ?: 0L) and
+                PlaybackState.ACTION_SEEK_TO) != 0L
 
-            LaunchedEffect(nonNullState.isPlaying, nonNullState.title) {
-                while (nonNullState.isPlaying) {
-                    positionMs = nonNullState.controller?.playbackState?.position ?: positionMs
+            LaunchedEffect(sessionToken, nonNullState.isPlaying, nonNullState.title, durationMs) {
+                while (true) {
+                    if (!isSeeking) {
+                        positionMs = currentPlaybackPosition(controller?.playbackState)
+                            .coerceIn(0L, durationMs.coerceAtLeast(0L))
+                    }
                     delay(500)
                 }
             }
@@ -657,9 +605,7 @@ private fun StandardMinimalPlayer(
                 // Track info (top — clickable to open app)
                 Column(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .let { if (!isEditing) it.clickable { onTapToOpenApp() } else it }
+                    modifier = Modifier.padding(top = 16.dp)
                 ) {
                     Text(
                         text = nonNullState.title,
@@ -682,12 +628,36 @@ private fun StandardMinimalPlayer(
                 // Progress + controls (bottom)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (durationMs > 0) {
-                        LinearProgressIndicator(
-                            progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth().height(2.dp),
-                            color = currentProgressColor,
-                            trackColor = currentProgressTrack
-                        )
+                        val progress = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                        if (canSeek) {
+                            Slider(
+                                value = progress,
+                                onValueChange = { value ->
+                                    if (!isEditing) {
+                                        isSeeking = true
+                                        positionMs = (value * durationMs).toLong()
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    if (!isEditing) onSeek(positionMs)
+                                    isSeeking = false
+                                },
+                                enabled = !isEditing,
+                                modifier = Modifier.fillMaxWidth().height(18.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = currentProgressColor,
+                                    activeTrackColor = currentProgressColor,
+                                    inactiveTrackColor = currentProgressTrack
+                                )
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(2.dp),
+                                color = currentProgressColor,
+                                trackColor = currentProgressTrack
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -729,6 +699,16 @@ private fun StandardMinimalPlayer(
             }
         }
     }
+}
+
+private fun currentPlaybackPosition(state: PlaybackState?): Long {
+    if (state == null) return 0L
+    if (state.state != PlaybackState.STATE_PLAYING) return state.position.coerceAtLeast(0L)
+    val elapsedSinceUpdate = (SystemClock.elapsedRealtime() - state.lastPositionUpdateTime)
+        .coerceAtLeast(0L)
+    return (state.position + elapsedSinceUpdate * state.playbackSpeed)
+        .toLong()
+        .coerceAtLeast(0L)
 }
 
 private fun formatMs(ms: Long): String {

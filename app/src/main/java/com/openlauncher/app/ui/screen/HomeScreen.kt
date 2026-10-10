@@ -35,6 +35,7 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.ClockStyle
+import com.openlauncher.app.data.MusicVisualizerStyle
 import com.openlauncher.app.data.computeWidgetMove
 import com.openlauncher.app.data.GRID_COLS
 import com.openlauncher.app.data.GRID_ROWS
@@ -64,7 +65,9 @@ private val ALL_WIDGET_TYPES = listOf(
     WidgetTypeInfo("SPEEDOMETER", "SPEED",       Icons.Default.Speed,         "GPS speed"),
     WidgetTypeInfo("VITALS",      "VITALS",      Icons.Default.Dns,           "Head Unit Health / Vitals"),
     WidgetTypeInfo("TRIP_TRACKER", "TRIP TRACKER", Icons.Default.Map,          "Trip logs & stats"),
-    WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads")
+    WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads"),
+    WidgetTypeInfo("MUSIC_VISUALIZER", "EQUALIZER", Icons.Default.Equalizer,   "Animated music visualizer"),
+    WidgetTypeInfo("QUICK_CONTROLS", "QUICK CONTROLS", Icons.Default.Tune,      "Volume, brightness & connections")
 )
 
 private fun canAddWidget(settings: com.openlauncher.app.data.AppSettings): Boolean {
@@ -78,6 +81,8 @@ private fun canAddWidget(settings: com.openlauncher.app.data.AppSettings): Boole
         if (settings.showVitals) add("VITALS")
         if (settings.showTripTracker) add("TRIP_TRACKER")
         if (settings.showSoundboard) add("SOUNDBOARD")
+        if (settings.showMusicVisualizer) add("MUSIC_VISUALIZER")
+        if (settings.showQuickControls) add("QUICK_CONTROLS")
     }
     val activeWidgets = settings.widgetLayout.filter { it.enabled && it.id in visibleIds }
     val occupied = buildSet<Pair<Int, Int>> {
@@ -106,8 +111,7 @@ fun HomeScreen(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
-    onLaunchCarPlay: () -> Unit,
-    onLaunchAndroidAuto: () -> Unit,
+    onSeek: (Long) -> Unit,
     onAssignCarPlay: () -> Unit,
     onAssignAndroidAuto: () -> Unit,
     onClearCarPlay: () -> Unit,
@@ -123,6 +127,7 @@ fun HomeScreen(
     onSetClockStyle: (ClockStyle) -> Unit,
     onSetVitalsAsBars: (Boolean) -> Unit = {},
     onSetSpeedometerDigitalOnly: (Boolean) -> Unit = {},
+    onSetMusicVisualizerStyle: (MusicVisualizerStyle) -> Unit = {},
     onUpdateSoundPad: (index: Int, pad: com.openlauncher.app.data.SoundPadConfig) -> Unit = { _, _ -> },
     hardwareRadio: com.openlauncher.app.viewmodel.LauncherViewModel.HardwareRadioState? = null,
     onLaunchHardwareRadio: () -> Unit = {},
@@ -243,6 +248,8 @@ fun HomeScreen(
                 if (settings.showVitals) add("VITALS")
                 if (settings.showTripTracker) add("TRIP_TRACKER")
                 if (settings.showSoundboard) add("SOUNDBOARD")
+                if (settings.showMusicVisualizer) add("MUSIC_VISUALIZER")
+                if (settings.showQuickControls) add("QUICK_CONTROLS")
             }
 
             // Keep only visible widgets exactly as configured in settings, allowing explicit resizing to dictate layout
@@ -318,6 +325,8 @@ fun HomeScreen(
                     "SPEEDOMETER" -> "SPEED"
                     "TRIP_TRACKER" -> "TRIP"
                     "SOUNDBOARD"  -> "SOUND"
+                    "MUSIC_VISUALIZER" -> "EQUALIZER"
+                    "QUICK_CONTROLS" -> "CONTROLS"
                     else          -> w.id
                 }
 
@@ -410,13 +419,10 @@ fun HomeScreen(
                         "NOW_PLAYING" -> NowPlayingWidget(
                             state               = nowPlaying,
                             accent              = accent,
-                            carPlayPackage      = settings.carPlayPackage,
-                            androidAutoPackage  = settings.androidAutoPackage,
                             onPlayPause         = onPlayPause,
                             onNext              = onNext,
                             onPrev              = onPrev,
-                            onLaunchCarPlay     = onLaunchCarPlay,
-                            onLaunchAndroidAuto = onLaunchAndroidAuto,
+                            onSeek              = onSeek,
                             onTapToOpenApp      = onTapNowPlaying,
                             modifier            = Modifier.fillMaxSize(),
                             isEditing           = editMode,
@@ -474,6 +480,20 @@ fun HomeScreen(
                             onUpdatePad = onUpdateSoundPad,
                             modifier  = Modifier.fillMaxSize()
                         )
+                        "MUSIC_VISUALIZER" -> MusicVisualizerWidget(
+                            state      = nowPlaying,
+                            accent     = accent,
+                            isDayMode  = isDayMode,
+                            style      = settings.musicVisualizerStyle,
+                            isEditing  = editMode,
+                            modifier   = Modifier.fillMaxSize()
+                        )
+                        "QUICK_CONTROLS" -> QuickControlsWidget(
+                            accent     = accent,
+                            isDayMode  = isDayMode,
+                            isEditing  = editMode,
+                            modifier   = Modifier.fillMaxSize()
+                        )
                     }
 
                     // Label — hide when album art fills the widget background
@@ -506,6 +526,7 @@ fun HomeScreen(
             clockStyle          = settings.clockStyle,
             vitalsAsBars        = settings.vitalsAsBars,
             speedometerDigitalOnly = settings.speedometerDigitalOnly,
+            musicVisualizerStyle = settings.musicVisualizerStyle,
             carPlayPackage      = settings.carPlayPackage,
             androidAutoPackage  = settings.androidAutoPackage,
             pipAppPackage       = settings.pipAppPackage,
@@ -520,6 +541,7 @@ fun HomeScreen(
             onSetClockStyle     = { onSetClockStyle(it) },
             onSetVitalsAsBars   = { onSetVitalsAsBars(it) },
             onSetSpeedometerDigitalOnly = { onSetSpeedometerDigitalOnly(it) },
+            onSetMusicVisualizerStyle = { onSetMusicVisualizerStyle(it) },
             onDismiss           = { contextMenuId = null }
         )
     }
@@ -561,6 +583,7 @@ private fun WidgetContextMenu(
     clockStyle: ClockStyle,
     vitalsAsBars: Boolean,
     speedometerDigitalOnly: Boolean,
+    musicVisualizerStyle: MusicVisualizerStyle,
     carPlayPackage: String = "",
     androidAutoPackage: String = "",
     pipAppPackage: String = "",
@@ -575,6 +598,7 @@ private fun WidgetContextMenu(
     onSetClockStyle: (ClockStyle) -> Unit,
     onSetVitalsAsBars: (Boolean) -> Unit,
     onSetSpeedometerDigitalOnly: (Boolean) -> Unit,
+    onSetMusicVisualizerStyle: (MusicVisualizerStyle) -> Unit,
     onDismiss: () -> Unit
 ) {
     val menuBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF111111)
@@ -644,6 +668,25 @@ private fun WidgetContextMenu(
                     onClick = { onSetSpeedometerDigitalOnly(true); onDismiss() },
                     isDayMode = isDayMode
                 )
+            }
+            if (widgetId == "MUSIC_VISUALIZER") {
+                val visualizerStyles = listOf(
+                    Triple(MusicVisualizerStyle.CLASSIC_BARS, "CLASSIC BARS", Icons.Default.BarChart),
+                    Triple(MusicVisualizerStyle.MIRRORED_BARS, "MIRRORED BARS", Icons.Default.Equalizer),
+                    Triple(MusicVisualizerStyle.CIRCULAR_SPECTRUM, "CIRCULAR", Icons.Default.DonutLarge),
+                    Triple(MusicVisualizerStyle.WAVEFORM, "WAVEFORM", Icons.Default.ShowChart),
+                    Triple(MusicVisualizerStyle.RING_OF_FIRE, "RING OF FIRE", Icons.Default.Whatshot)
+                )
+                visualizerStyles.forEach { (style, label, icon) ->
+                    HorizontalDivider(color = menuDivider)
+                    ContextRow(
+                        label = label,
+                        icon = icon,
+                        tint = if (musicVisualizerStyle == style) accent else inactiveMenuTint,
+                        onClick = { onSetMusicVisualizerStyle(style); onDismiss() },
+                        isDayMode = isDayMode
+                    )
+                }
             }
             if (widgetId == "NOW_PLAYING") {
                 HorizontalDivider(color = menuDivider)
@@ -839,6 +882,8 @@ private fun WidgetLibraryDialog(
         if (settings.showVitals) add("VITALS")
         if (settings.showTripTracker) add("TRIP_TRACKER")
         if (settings.showSoundboard) add("SOUNDBOARD")
+        if (settings.showMusicVisualizer) add("MUSIC_VISUALIZER")
+        if (settings.showQuickControls) add("QUICK_CONTROLS")
     }
     val canAdd = canAddWidget(settings)
 

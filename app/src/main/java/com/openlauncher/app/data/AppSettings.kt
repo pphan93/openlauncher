@@ -9,6 +9,13 @@ enum class AppFont { SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
 enum class DayNightMode { DARK, LIGHT, AUTO, SYSTEM }
 enum class SidebarPosition { LEFT, RIGHT, BOTTOM }
 enum class GradientDirection { TOP_TO_BOTTOM, LEFT_TO_RIGHT, DIAGONAL, RADIAL }
+enum class MusicVisualizerStyle {
+    CLASSIC_BARS,
+    MIRRORED_BARS,
+    CIRCULAR_SPECTRUM,
+    WAVEFORM,
+    RING_OF_FIRE
+}
 
 enum class ShortcutIconCategory(val displayName: String) {
     VEHICLE("Vehicle"),
@@ -144,7 +151,7 @@ const val GRID_COLS = 3
 const val GRID_ROWS = 2
 
 data class WidgetConfig(
-    val id: String,          // "CLOCK" | "WEATHER" | "TELEMETRY" | "NOW_PLAYING"
+    val id: String,          // Stable ID from the widget library (for example "CLOCK")
     val gridX: Int,          // column 0..(GRID_COLS-1)
     val gridY: Int,          // row    0..(GRID_ROWS-1)
     val spanX: Int = 1,
@@ -190,6 +197,9 @@ data class AppSettings(
     val showTripTracker: Boolean = false,
     val compassOffset: Float = 0f,
     val showSoundboard: Boolean = false,
+    val showMusicVisualizer: Boolean = false,
+    val showQuickControls: Boolean = false,
+    val musicVisualizerStyle: MusicVisualizerStyle = MusicVisualizerStyle.MIRRORED_BARS,
     val soundboardPads: List<SoundPadConfig> = defaultSoundboardPads(),
     val vitalsAsBars: Boolean = false,
     val speedometerDigitalOnly: Boolean = false,
@@ -221,6 +231,8 @@ fun AppSettings.activeWidgetIds(): Set<String> = buildSet {
     if (showVitals) add("VITALS")
     if (showTripTracker) add("TRIP_TRACKER")
     if (showSoundboard) add("SOUNDBOARD")
+    if (showMusicVisualizer) add("MUSIC_VISUALIZER")
+    if (showQuickControls) add("QUICK_CONTROLS")
 }
 
 /**

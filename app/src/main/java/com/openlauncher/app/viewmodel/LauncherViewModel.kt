@@ -236,6 +236,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 "VITALS"      -> copy(showVitals = true)
                 "TRIP_TRACKER" -> copy(showTripTracker = true)
                 "SOUNDBOARD"  -> copy(showSoundboard = true)
+                "MUSIC_VISUALIZER" -> copy(showMusicVisualizer = true)
+                "QUICK_CONTROLS" -> copy(showQuickControls = true)
                 else          -> this
             }
             val idx       = layout.indexOfFirst { it.id == id }
@@ -267,6 +269,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 "VITALS"      -> copy(showVitals = false)
                 "TRIP_TRACKER" -> copy(showTripTracker = false)
                 "SOUNDBOARD"  -> copy(showSoundboard = false)
+                "MUSIC_VISUALIZER" -> copy(showMusicVisualizer = false)
+                "QUICK_CONTROLS" -> copy(showQuickControls = false)
                 else          -> this
             }
         }
@@ -384,6 +388,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun skipNext() { nowPlaying.value?.controller?.transportControls?.skipToNext() }
     fun skipPrev() { nowPlaying.value?.controller?.transportControls?.skipToPrevious() }
+    fun seekTo(positionMs: Long) {
+        nowPlaying.value?.controller?.transportControls?.seekTo(positionMs.coerceAtLeast(0L))
+    }
 
     // ── Weather ───────────────────────────────────────────────────────────────
     private val _weather = MutableStateFlow<WeatherState?>(null)
