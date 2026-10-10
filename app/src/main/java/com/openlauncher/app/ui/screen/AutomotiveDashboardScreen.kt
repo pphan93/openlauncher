@@ -3,6 +3,7 @@ package com.openlauncher.app.ui.screen
 import android.media.MediaMetadata
 import android.os.SystemClock
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,8 +17,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +35,7 @@ import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.ui.widget.WeatherGlyph
+import com.openlauncher.app.ui.widget.SpeedometerWidget
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -408,49 +414,111 @@ private fun VehicleStatusCard(
     secondary: Color,
     modifier: Modifier = Modifier
 ) {
-    val speedKmh = (location?.speedMps ?: 0f) * 3.6f
-    val displaySpeed = if (metric) speedKmh.roundToInt() else (speedKmh * 0.621371f).roundToInt()
     val heading = compassHeading(bearing)
 
     Column(
-        modifier = modifier.clip(DashboardRadius).background(cardColor).padding(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        modifier = modifier.clip(DashboardRadius).background(cardColor).padding(horizontal = 12.dp, vertical = 11.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("2019 CAMRY LE", color = primary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Image(
-            painter = painterResource(R.drawable.camry_2019_le),
-            contentDescription = "2019 Toyota Camry LE",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().weight(1f)
-        )
-        Text(displaySpeed.toString(), color = primary, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-        Text(if (metric) "km/h" else "mph", color = secondary, fontSize = 8.sp)
-        LinearProgressIndicator(
-            progress = { (speedKmh / 180f).coerceIn(0f, 1f) },
-            color = DashboardYellow,
-            trackColor = secondary.copy(alpha = 0.12f),
-            modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape)
-        )
-        Spacer(Modifier.height(10.dp))
         Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(secondary.copy(alpha = 0.08f)).padding(vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("2019 CAMRY LE", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("TOYOTA", color = secondary, fontSize = 7.sp, letterSpacing = 1.4.sp)
+            }
+            Surface(
+                shape = CircleShape,
+                color = secondary.copy(alpha = 0.08f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, secondary.copy(alpha = 0.12f))
+            ) {
+                Icon(
+                    Icons.Default.Sync,
+                    contentDescription = "Refresh vehicle status",
+                    tint = secondary,
+                    modifier = Modifier.padding(8.dp).size(14.dp)
+                )
+            }
+        }
+
+        Image(
+            painter = painterResource(R.drawable.camry_2019_le_black),
+            contentDescription = "Black 2019 Toyota Camry LE",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().weight(0.9f).padding(vertical = 3.dp)
+        )
+
+        Row(
+            modifier = Modifier.padding(bottom = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(primary.copy(alpha = 0.8f)))
+            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(secondary.copy(alpha = 0.18f)))
+            Box(Modifier.size(20.dp, 2.dp).clip(CircleShape).background(secondary.copy(alpha = 0.18f)))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().height(82.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            VehicleMetric(Icons.Default.LocalGasStation, "FUEL", "--%", primary, secondary)
-            VehicleMetric(Icons.Default.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", primary, secondary)
-            VehicleMetric(Icons.Default.Route, "RANGE", "--", primary, secondary)
+            VehicleMetricGauge(Icons.Default.LocalGasStation, "FUEL", "--%", 0f, Color(0xFF79CCFA), primary, secondary)
+            VehicleMetricGauge(Icons.Default.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", bearing / 360f, Color(0xFF95E6B2), primary, secondary)
+            VehicleMetricGauge(Icons.Default.Route, "RANGE", "--", 0f, Color(0xFF79CCFA), primary, secondary)
         }
+
+        SpeedometerWidget(
+            location = location,
+            isMetric = metric,
+            accent = Color(0xFF79CCFA),
+            isDayMode = primary != Color.White,
+            modifier = Modifier.fillMaxWidth().weight(1.12f)
+        )
     }
 }
 
 @Composable
-private fun VehicleMetric(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, primary: Color, secondary: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = DashboardYellow, modifier = Modifier.size(17.dp))
-        Spacer(Modifier.height(3.dp))
-        Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(label, color = secondary, fontSize = 6.sp)
+private fun VehicleMetricGauge(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    progress: Float,
+    accent: Color,
+    primary: Color,
+    secondary: Color
+) {
+    Box(modifier = Modifier.size(76.dp), contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = 2.dp.toPx()
+            val inset = 7.dp.toPx()
+            val gaugeSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+            drawArc(
+                color = secondary.copy(alpha = 0.16f),
+                startAngle = 12f,
+                sweepAngle = 156f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = gaugeSize,
+                style = Stroke(strokeWidth, cap = StrokeCap.Round)
+            )
+            if (progress > 0f) {
+                drawArc(
+                    color = accent,
+                    startAngle = 12f,
+                    sweepAngle = 156f * progress.coerceIn(0f, 1f),
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = gaugeSize,
+                    style = Stroke(strokeWidth, cap = StrokeCap.Round)
+                )
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, null, tint = accent, modifier = Modifier.size(13.dp))
+            Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, color = secondary, fontSize = 6.sp)
+        }
     }
 }
 
