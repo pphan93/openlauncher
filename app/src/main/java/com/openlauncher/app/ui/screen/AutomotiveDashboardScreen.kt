@@ -34,6 +34,7 @@ import com.openlauncher.app.R
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
+import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.ui.widget.WeatherGlyph
 import com.openlauncher.app.ui.widget.SpeedometerWidget
 import com.openlauncher.app.util.LocationData
@@ -74,12 +75,13 @@ fun AutomotiveDashboardScreen(
     val cardAlpha = settings.widgetOpacity.coerceIn(0f, 1f)
     val visibleCard = cardColor.copy(alpha = cardColor.alpha * cardAlpha)
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(background)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
+    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = Poppins)) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(background)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
         DashboardHeader(
             settings = settings,
             isWifi = isWifi,
@@ -139,6 +141,7 @@ fun AutomotiveDashboardScreen(
                 modifier = Modifier.weight(0.98f).fillMaxHeight()
             )
         }
+    }
     }
 }
 

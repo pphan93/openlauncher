@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import com.openlauncher.app.data.ShortcutIconCategory
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.ui.theme.LocalDayMode
+import com.openlauncher.app.ui.theme.Poppins
 import kotlin.math.roundToInt
 
 private val ICON_SIZE   = 22.dp
@@ -79,6 +81,62 @@ private val CarPlayIcon: ImageVector = ImageVector.Builder(
         lineTo(9.85f, 16.78f)
         curveTo(9.35f, 17.1f, 8.7f, 16.75f, 8.7f, 16.15f)
         close()
+    }
+}.build()
+
+/** Four outlined tiles matching the app-grid symbol in the automotive reference. */
+private val AppsOutlineIcon: ImageVector = ImageVector.Builder(
+    name = "AppsOutline",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).apply {
+    listOf(4f to 4f, 14f to 4f, 4f to 14f, 14f to 14f).forEach { (x, y) ->
+        path(
+            fill = null,
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round
+        ) {
+            moveTo(x + 1f, y)
+            lineTo(x + 5f, y)
+            curveTo(x + 5.55f, y, x + 6f, y + 0.45f, x + 6f, y + 1f)
+            lineTo(x + 6f, y + 5f)
+            curveTo(x + 6f, y + 5.55f, x + 5.55f, y + 6f, x + 5f, y + 6f)
+            lineTo(x + 1f, y + 6f)
+            curveTo(x + 0.45f, y + 6f, x, y + 5.55f, x, y + 5f)
+            lineTo(x, y + 1f)
+            curveTo(x, y + 0.45f, x + 0.45f, y, x + 1f, y)
+            close()
+        }
+    }
+}.build()
+
+/** Minimal lane-marking icon matching the Direction symbol in the reference. */
+private val DirectionOutlineIcon: ImageVector = ImageVector.Builder(
+    name = "DirectionOutline",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round
+    ) {
+        moveTo(6.5f, 3f)
+        lineTo(5f, 21f)
+        moveTo(17.5f, 3f)
+        lineTo(19f, 21f)
+        moveTo(12f, 3f)
+        lineTo(12f, 7f)
+        moveTo(12f, 10f)
+        lineTo(12f, 14f)
+        moveTo(12f, 17f)
+        lineTo(12f, 21f)
     }
 }.build()
 
@@ -173,7 +231,7 @@ fun Sidebar(
 
     val navButtons: @Composable () -> Unit = {
         NavButton(
-            icon         = Icons.Default.Apps,
+            icon         = AppsOutlineIcon,
             label        = "Apps",
             isActive     = currentDest == NavDestination.APP_LIBRARY,
             accent       = accent,
@@ -182,7 +240,7 @@ fun Sidebar(
             onClick      = { onNavigate(NavDestination.APP_LIBRARY) }
         )
         NavButton(
-            icon         = Icons.Default.Settings,
+            icon         = Icons.Outlined.Settings,
             label        = "Settings",
             isActive     = currentDest == NavDestination.SETTINGS,
             accent       = accent,
@@ -191,7 +249,7 @@ fun Sidebar(
             onClick      = { onNavigate(NavDestination.SETTINGS) }
         )
         NavButton(
-            icon         = Icons.Default.Home,
+            icon         = Icons.Outlined.Home,
             label        = "Home",
             isActive     = currentDest == NavDestination.HOME,
             accent       = accent,
@@ -219,13 +277,13 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                NavButton(Icons.Default.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true) {
+                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true) {
                     onNavigate(NavDestination.HOME)
                 }
-                NavButton(Icons.Default.Apps, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
+                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
                     onNavigate(NavDestination.APP_LIBRARY)
                 }
-                NavButton(Icons.Default.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true) {
+                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true) {
                     onNavigate(NavDestination.SETTINGS)
                 }
                 shortcutsContent(settings.shortcuts.indices.toList())
@@ -415,6 +473,7 @@ private fun ShortcutSlot(
                     text = shortcut.label.ifEmpty { "Add" },
                     color = iconInactive,
                     fontSize = 7.sp,
+                    fontFamily = Poppins,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -641,7 +700,14 @@ private fun NavButton(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.height(2.dp))
-                Text(label, color = if (isActive) activeIconColor else iconInactive, fontSize = 7.sp, maxLines = 1)
+                Text(
+                    label,
+                    color = if (isActive) activeIconColor else iconInactive,
+                    fontSize = 7.sp,
+                    fontFamily = Poppins,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    maxLines = 1
+                )
             }
         } else {
             Icon(
@@ -656,7 +722,7 @@ private fun NavButton(
 
 fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
     // Vehicle
-    DefaultShortcutIcon.CAR         -> Icons.Default.DirectionsCar
+    DefaultShortcutIcon.CAR         -> Icons.Outlined.DirectionsCar
     DefaultShortcutIcon.CAR_PLAY    -> CarPlayIcon
     DefaultShortcutIcon.ELECTRIC_CAR -> Icons.Default.ElectricCar
     DefaultShortcutIcon.GAS_STATION -> Icons.Default.LocalGasStation
@@ -669,14 +735,14 @@ fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
     DefaultShortcutIcon.DASHBOARD   -> Icons.Default.Speed
     // Navigation
     DefaultShortcutIcon.MAP         -> Icons.Default.Map
-    DefaultShortcutIcon.NAVIGATION  -> Icons.Default.Navigation
+    DefaultShortcutIcon.NAVIGATION  -> DirectionOutlineIcon
     DefaultShortcutIcon.COMPASS     -> Icons.Default.Explore
     DefaultShortcutIcon.LOCATION    -> Icons.Default.Place
     DefaultShortcutIcon.ROUTE       -> Icons.Default.Route
     DefaultShortcutIcon.NEAR_ME     -> Icons.Default.NearMe
     // Audio & media
-    DefaultShortcutIcon.RADIO       -> Icons.Default.Radio
-    DefaultShortcutIcon.MUSIC       -> Icons.Default.MusicNote
+    DefaultShortcutIcon.RADIO       -> Icons.Outlined.Radio
+    DefaultShortcutIcon.MUSIC       -> Icons.Outlined.MusicNote
     DefaultShortcutIcon.LIBRARY_MUSIC -> Icons.Default.LibraryMusic
     DefaultShortcutIcon.PLAY        -> Icons.Default.PlayArrow
     DefaultShortcutIcon.SPEAKER     -> Icons.Default.Speaker
@@ -688,7 +754,7 @@ fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
     DefaultShortcutIcon.TV          -> Icons.Default.Tv
     DefaultShortcutIcon.VIDEOCAM    -> Icons.Default.Videocam
     // Communication
-    DefaultShortcutIcon.PHONE       -> Icons.Default.Phone
+    DefaultShortcutIcon.PHONE       -> Icons.Outlined.Phone
     DefaultShortcutIcon.MESSAGE     -> Icons.Default.Message
     DefaultShortcutIcon.CHAT        -> Icons.Default.Chat
     DefaultShortcutIcon.EMAIL       -> Icons.Default.Email
@@ -710,24 +776,24 @@ fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
     DefaultShortcutIcon.NIGHT       -> Icons.Default.DarkMode
     DefaultShortcutIcon.RAIN        -> Icons.Default.WaterDrop
     // General utility
-    DefaultShortcutIcon.CAMERA      -> Icons.Default.CameraAlt
+    DefaultShortcutIcon.CAMERA      -> Icons.Outlined.CameraAlt
     DefaultShortcutIcon.STAR        -> Icons.Default.Star
     DefaultShortcutIcon.FAVORITE    -> Icons.Default.Favorite
     DefaultShortcutIcon.TIMER       -> Icons.Default.Timer
     DefaultShortcutIcon.CLOCK       -> Icons.Default.Schedule
     DefaultShortcutIcon.ALARM       -> Icons.Default.Alarm
-    DefaultShortcutIcon.CALENDAR    -> Icons.Default.CalendarMonth
+    DefaultShortcutIcon.CALENDAR    -> Icons.Outlined.CalendarMonth
     DefaultShortcutIcon.CALCULATOR  -> Icons.Default.Calculate
     DefaultShortcutIcon.SHOPPING    -> Icons.Default.ShoppingCart
     DefaultShortcutIcon.FOOD        -> Icons.Default.Restaurant
     DefaultShortcutIcon.COFFEE      -> Icons.Default.LocalCafe
-    DefaultShortcutIcon.HOME        -> Icons.Default.Home
+    DefaultShortcutIcon.HOME        -> Icons.Outlined.Home
     DefaultShortcutIcon.WORK        -> Icons.Default.Work
     DefaultShortcutIcon.SEARCH      -> Icons.Default.Search
     DefaultShortcutIcon.NOTIFICATIONS -> Icons.Default.Notifications
     DefaultShortcutIcon.LOCK        -> Icons.Default.Lock
     DefaultShortcutIcon.SECURITY    -> Icons.Default.Security
-    DefaultShortcutIcon.SETTINGS    -> Icons.Default.Settings
+    DefaultShortcutIcon.SETTINGS    -> Icons.Outlined.Settings
     DefaultShortcutIcon.POWER       -> Icons.Default.PowerSettingsNew
     DefaultShortcutIcon.DOWNLOAD    -> Icons.Default.Download
     DefaultShortcutIcon.GLOBE       -> Icons.Default.Language

@@ -1190,6 +1190,7 @@ private fun sliderColors(accent: Color): androidx.compose.material3.SliderColors
 
 
 private fun fontDisplayName(font: AppFont): String = when (font) {
+    AppFont.POPPINS         -> "Poppins"
     AppFont.SYSTEM          -> "System"
     AppFont.JETBRAINS_MONO  -> "JetBrains Mono"
     AppFont.SOURCE_CODE_PRO -> "Source Code Pro"

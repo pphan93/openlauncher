@@ -24,7 +24,15 @@ val SourceCodePro = FontFamily(
     Font(R.font.source_code_pro_bold,    FontWeight.Bold),
 )
 
+val Poppins = FontFamily(
+    Font(R.font.poppins_regular,  FontWeight.Normal),
+    Font(R.font.poppins_medium,   FontWeight.Medium),
+    Font(R.font.poppins_semibold, FontWeight.SemiBold),
+    Font(R.font.poppins_bold,     FontWeight.Bold),
+)
+
 fun AppFont.toFontFamily(): FontFamily = when (this) {
+    AppFont.POPPINS         -> Poppins
     AppFont.SYSTEM          -> FontFamily.Default
     AppFont.JETBRAINS_MONO  -> JetBrainsMono
     AppFont.SOURCE_CODE_PRO -> SourceCodePro

@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.toArgb
 
 enum class ClockStyle { DIGITAL, ANALOG }
 enum class UnitSystem { METRIC, IMPERIAL }
-enum class AppFont { SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
+enum class AppFont { POPPINS, SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
 enum class DayNightMode { DARK, LIGHT, AUTO, SYSTEM }
 enum class SidebarPosition { LEFT, RIGHT, BOTTOM }
 enum class GradientDirection { TOP_TO_BOTTOM, LEFT_TO_RIGHT, DIAGONAL, RADIAL }
@@ -184,7 +184,7 @@ data class AppSettings(
     val uiScale: Float = 1.0f,
     val clockStyle: ClockStyle = ClockStyle.DIGITAL,
     val unitSystem: UnitSystem = UnitSystem.METRIC,
-    val appFont: AppFont = AppFont.JETBRAINS_MONO,
+    val appFont: AppFont = AppFont.POPPINS,
     val showWeather: Boolean = true,
     val widgetOpacity: Float = 1.0f,
     val manualWeatherLocationName: String = "",
