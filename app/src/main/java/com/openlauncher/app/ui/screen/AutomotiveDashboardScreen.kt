@@ -262,10 +262,13 @@ private fun DashboardMusicCard(
             delay(500)
         }
     }
+    val safePosition = position.coerceIn(0L, if (duration > 0L) duration else Long.MAX_VALUE)
+    val elapsedLabel = if (duration > 0L) formatPlaybackTime(safePosition) else "--:--"
+    val durationLabel = if (duration > 0L) formatPlaybackTime(duration) else "--:--"
 
     Column(
         modifier = modifier.fillMaxWidth().clip(DashboardRadius).background(cardColor)
-            .clickable(onClick = onOpen).padding(14.dp),
+            .clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -274,47 +277,93 @@ private fun DashboardMusicCard(
                     bitmap = state.albumArt.asImageBitmap(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp))
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).background(DashboardYellow),
+                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp)).background(DashboardYellow),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.MusicNote, null, tint = Color.Black) }
+                ) { Icon(Icons.Default.MusicNote, null, tint = Color.Black, modifier = Modifier.size(24.dp)) }
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
                 Text(state?.artist.orEmpty(), color = secondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.SkipPrevious, "Previous", tint = primary, modifier = Modifier.size(19.dp)) }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onPrev, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(20.dp))
+            }
+            IconButton(
+                onClick = {
+                    if (duration > 0L) onSeek((safePosition - 10_000L).coerceAtLeast(0L))
+                },
+                modifier = Modifier.size(30.dp)
+            ) {
+                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(19.dp))
+            }
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(34.dp).clip(CircleShape).background(DashboardYellow)
-            ) { Icon(if (state?.isPlaying == true) Icons.Default.Pause else Icons.Default.PlayArrow, "Play or pause", tint = Color.Black, modifier = Modifier.size(20.dp)) }
-            IconButton(onClick = onNext, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.SkipNext, "Next", tint = primary, modifier = Modifier.size(19.dp)) }
+                modifier = Modifier.size(38.dp).clip(CircleShape).background(DashboardYellow)
+            ) {
+                Icon(
+                    if (state?.isPlaying == true) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    "Play or pause",
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            IconButton(
+                onClick = {
+                    if (duration > 0L) onSeek((safePosition + 10_000L).coerceAtMost(duration))
+                },
+                modifier = Modifier.size(30.dp)
+            ) {
+                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(19.dp))
+            }
+            IconButton(onClick = onNext, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(20.dp))
+            }
         }
-        Slider(
-            value = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-            onValueChange = {
-                dragging = true
-                position = (duration * it).toLong()
-            },
-            onValueChangeFinished = {
-                if (duration > 0) onSeek(position)
-                dragging = false
-            },
-            enabled = duration > 0,
-            colors = SliderDefaults.colors(
-                thumbColor = DashboardYellow,
-                activeTrackColor = DashboardYellow,
-                inactiveTrackColor = secondary.copy(alpha = 0.18f)
-            ),
-            modifier = Modifier.fillMaxWidth().height(18.dp)
-        )
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(elapsedLabel, color = secondary, fontSize = 8.sp)
+            Slider(
+                value = if (duration > 0) (safePosition.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                onValueChange = {
+                    dragging = true
+                    position = (duration * it).toLong()
+                },
+                onValueChangeFinished = {
+                    if (duration > 0) onSeek(position)
+                    dragging = false
+                },
+                enabled = duration > 0,
+                colors = SliderDefaults.colors(
+                    thumbColor = DashboardYellow,
+                    activeTrackColor = DashboardYellow,
+                    inactiveTrackColor = secondary.copy(alpha = 0.18f),
+                    disabledThumbColor = secondary.copy(alpha = 0.28f),
+                    disabledActiveTrackColor = secondary.copy(alpha = 0.18f),
+                    disabledInactiveTrackColor = secondary.copy(alpha = 0.12f)
+                ),
+                modifier = Modifier.weight(1f).padding(horizontal = 5.dp).height(20.dp)
+            )
+            Text(durationLabel, color = secondary, fontSize = 8.sp)
+        }
     }
+}
+
+private fun formatPlaybackTime(milliseconds: Long): String {
+    val totalSeconds = (milliseconds.coerceAtLeast(0L) / 1_000L)
+    return "%d:%02d".format(Locale.getDefault(), totalSeconds / 60L, totalSeconds % 60L)
 }
 
 @Composable
