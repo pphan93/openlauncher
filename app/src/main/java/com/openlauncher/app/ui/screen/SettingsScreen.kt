@@ -69,6 +69,7 @@ private data class PendingProfileCrop(
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
@@ -1147,7 +1148,10 @@ fun SettingsScreen(
         // ── Typography ───────────────────────────────────────────────────────
         SettingsSection("Typography") {
             SettingsRow(label = "Font", sublabel = fontDisplayName(settings.appFont), icon = Icons.Default.FontDownload) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     com.openlauncher.app.data.AppFont.entries.forEach { font ->
                         FilterChip(
                             selected = settings.appFont == font,
@@ -1678,6 +1682,10 @@ private fun sliderColors(accent: Color): androidx.compose.material3.SliderColors
 
 private fun fontDisplayName(font: AppFont): String = when (font) {
     AppFont.POPPINS         -> "Poppins"
+    AppFont.INTER           -> "Inter"
+    AppFont.MANROPE         -> "Manrope"
+    AppFont.BARLOW_CONDENSED -> "Barlow"
+    AppFont.OXANIUM         -> "Oxanium"
     AppFont.SYSTEM          -> "System"
     AppFont.JETBRAINS_MONO  -> "JetBrains Mono"
     AppFont.SOURCE_CODE_PRO -> "Source Code Pro"

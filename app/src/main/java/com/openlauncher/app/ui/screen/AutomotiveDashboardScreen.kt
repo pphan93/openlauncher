@@ -61,7 +61,7 @@ import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.LicensePlateRegion
-import com.openlauncher.app.ui.theme.Poppins
+import com.openlauncher.app.ui.theme.toFontFamily
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +110,7 @@ fun AutomotiveDashboardScreen(
     val dashboardAccentContent = if (dashboardAccent.luminance() > 0.42f) Color.Black else Color.White
 
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = Poppins),
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = settings.appFont.toFontFamily()),
         LocalDashboardAccent provides dashboardAccent,
         LocalDashboardAccentContent provides dashboardAccentContent
     ) {

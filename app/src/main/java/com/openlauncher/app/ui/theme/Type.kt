@@ -31,8 +31,42 @@ val Poppins = FontFamily(
     Font(R.font.poppins_bold,     FontWeight.Bold),
 )
 
+val Inter = FontFamily(
+    Font(R.font.inter_regular,  FontWeight.Normal),
+    Font(R.font.inter_medium,   FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold,     FontWeight.Bold),
+)
+
+val Manrope = FontFamily(
+    Font(R.font.manrope_regular,  FontWeight.Normal),
+    Font(R.font.manrope_medium,   FontWeight.Medium),
+    Font(R.font.manrope_semibold, FontWeight.SemiBold),
+    Font(R.font.manrope_bold,     FontWeight.Bold),
+)
+
+val Barlow = FontFamily(
+    Font(R.font.barlow_regular,  FontWeight.Normal),
+    Font(R.font.barlow_medium,   FontWeight.Medium),
+    Font(R.font.barlow_semibold, FontWeight.SemiBold),
+    Font(R.font.barlow_bold,     FontWeight.Bold),
+)
+
+val Oxanium = FontFamily(
+    Font(R.font.oxanium_regular,  FontWeight.Normal),
+    Font(R.font.oxanium_medium,   FontWeight.Medium),
+    Font(R.font.oxanium_semibold, FontWeight.SemiBold),
+    Font(R.font.oxanium_bold,     FontWeight.Bold),
+)
+
 fun AppFont.toFontFamily(): FontFamily = when (this) {
     AppFont.POPPINS         -> Poppins
+    AppFont.INTER           -> Inter
+    AppFont.MANROPE         -> Manrope
+    // Keep the persisted enum name for settings compatibility; use normal-width
+    // Barlow because condensed glyphs render poorly on low-density head units.
+    AppFont.BARLOW_CONDENSED -> Barlow
+    AppFont.OXANIUM         -> Oxanium
     AppFont.SYSTEM          -> FontFamily.Default
     AppFont.JETBRAINS_MONO  -> JetBrainsMono
     AppFont.SOURCE_CODE_PRO -> SourceCodePro

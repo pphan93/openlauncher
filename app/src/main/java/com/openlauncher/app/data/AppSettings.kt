@@ -4,7 +4,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 
 enum class UnitSystem { METRIC, IMPERIAL }
-enum class AppFont { POPPINS, SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
+enum class AppFont {
+    POPPINS,
+    INTER,
+    MANROPE,
+    BARLOW_CONDENSED,
+    OXANIUM,
+    SYSTEM,
+    JETBRAINS_MONO,
+    SOURCE_CODE_PRO
+}
 enum class DayNightMode { DARK, LIGHT, AUTO, SYSTEM }
 enum class SidebarPosition { LEFT, RIGHT, BOTTOM }
 enum class LicensePlateRegion(val displayName: String) {
