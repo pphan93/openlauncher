@@ -1,12 +1,6 @@
 package com.openlauncher.app
 
 import android.Manifest
-import android.app.Activity
-import android.appwidget.AppWidgetHost
-import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProviderInfo
-import android.content.ComponentName
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,42 +23,15 @@ import coil.compose.AsyncImage
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.GradientDirection
-import com.openlauncher.app.data.EXTERNAL_WIDGET_PREFIX
-import com.openlauncher.app.data.ExternalWidgetConfig
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.ui.components.Sidebar
 import com.openlauncher.app.ui.screen.*
 import com.openlauncher.app.ui.theme.OpenLauncherTheme
-import com.openlauncher.app.ui.widget.OPEN_LAUNCHER_APP_WIDGET_HOST_ID
 import com.openlauncher.app.viewmodel.LauncherViewModel
-import kotlin.math.ceil
 
 class MainActivity : ComponentActivity() {
 
-    companion object {
-        private const val STATE_PENDING_APP_WIDGET_ID = "pending_app_widget_id"
-        private const val STATE_PENDING_APP_WIDGET_PROVIDER = "pending_app_widget_provider"
-    }
-
     private val vm: LauncherViewModel by viewModels()
-    private val appWidgetManager by lazy { AppWidgetManager.getInstance(this) }
-    private val appWidgetHost by lazy { AppWidgetHost(this, OPEN_LAUNCHER_APP_WIDGET_HOST_ID) }
-    private var pendingAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
-    private var pendingAppWidgetProvider: AppWidgetProviderInfo? = null
-
-    private val bindAppWidget = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) configureOrFinishPendingWidget()
-        else cancelPendingWidget()
-    }
-
-    private val configureAppWidget = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) finishPendingWidget()
-        else cancelPendingWidget()
-    }
 
     private val locationPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,111 +50,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun beginAddingAndroidWidget(provider: AppWidgetProviderInfo) {
-        cancelPendingWidget()
-        pendingAppWidgetProvider = provider
-        pendingAppWidgetId = appWidgetHost.allocateAppWidgetId()
-
-        val bound = runCatching {
-            appWidgetManager.bindAppWidgetIdIfAllowed(pendingAppWidgetId, provider.provider)
-        }.getOrDefault(false)
-
-        if (bound) {
-            configureOrFinishPendingWidget()
-            return
-        }
-
-        val bindIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingAppWidgetId)
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider.provider)
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, provider.profile)
-        }
-        runCatching { bindAppWidget.launch(bindIntent) }
-            .onFailure {
-                android.widget.Toast.makeText(
-                    this,
-                    "This head unit does not provide the Android widget approval screen.",
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
-                cancelPendingWidget()
-            }
-    }
-
-    private fun configureOrFinishPendingWidget() {
-        val provider = appWidgetManager.getAppWidgetInfo(pendingAppWidgetId)
-            ?: pendingAppWidgetProvider
-            ?: return cancelPendingWidget()
-        pendingAppWidgetProvider = provider
-
-        val configureComponent = provider.configure
-        if (configureComponent == null) {
-            finishPendingWidget()
-            return
-        }
-
-        val configureIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-            component = configureComponent
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingAppWidgetId)
-        }
-        runCatching { configureAppWidget.launch(configureIntent) }
-            .onFailure {
-                // A few older providers declare a stale configuration activity.
-                // Keep the bound widget usable instead of discarding it.
-                finishPendingWidget()
-            }
-    }
-
-    private fun finishPendingWidget() {
-        val appWidgetId = pendingAppWidgetId
-        val provider = appWidgetManager.getAppWidgetInfo(appWidgetId)
-            ?: pendingAppWidgetProvider
-            ?: return cancelPendingWidget()
-        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
-
-        val density = resources.displayMetrics.density.coerceAtLeast(1f)
-        val cellWidthDp = ((resources.configuration.screenWidthDp - 80f) / 3f).coerceAtLeast(120f)
-        val cellHeightDp = (resources.configuration.screenHeightDp / 2f).coerceAtLeast(100f)
-        val minWidthDp = provider.minWidth / density
-        val minHeightDp = provider.minHeight / density
-        val preferredSpanX = ceil(minWidthDp / cellWidthDp).toInt().coerceIn(1, 3)
-        val preferredSpanY = ceil(minHeightDp / cellHeightDp).toInt().coerceIn(1, 2)
-
-        vm.addExternalWidget(
-            widget = ExternalWidgetConfig(
-                appWidgetId = appWidgetId,
-                providerPackage = provider.provider.packageName,
-                providerClass = provider.provider.className,
-                label = provider.loadLabel(packageManager).toString()
-            ),
-            preferredSpanX = preferredSpanX,
-            preferredSpanY = preferredSpanY
-        )
-        pendingAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
-        pendingAppWidgetProvider = null
-    }
-
-    private fun cancelPendingWidget() {
-        if (pendingAppWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-            runCatching { appWidgetHost.deleteAppWidgetId(pendingAppWidgetId) }
-        }
-        pendingAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
-        pendingAppWidgetProvider = null
-    }
-
-    private fun removeWidget(widgetId: String) {
-        if (widgetId.startsWith(EXTERNAL_WIDGET_PREFIX)) {
-            widgetId.removePrefix(EXTERNAL_WIDGET_PREFIX).toIntOrNull()?.let { appWidgetId ->
-                runCatching { appWidgetHost.deleteAppWidgetId(appWidgetId) }
-            }
-        }
-        vm.removeWidget(widgetId)
-    }
-
-    private fun resetSettingsAndWidgets() {
-        cancelPendingWidget()
-        vm.settings.value.externalWidgets.forEach { widget ->
-            runCatching { appWidgetHost.deleteAppWidgetId(widget.appWidgetId) }
-        }
+    private fun resetSettings() {
         vm.resetSettings()
     }
 
@@ -198,17 +61,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        pendingAppWidgetId = savedInstanceState?.getInt(
-            STATE_PENDING_APP_WIDGET_ID,
-            AppWidgetManager.INVALID_APPWIDGET_ID
-        ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
-        val savedProvider = savedInstanceState
-            ?.getString(STATE_PENDING_APP_WIDGET_PROVIDER)
-            ?.let(ComponentName::unflattenFromString)
-        pendingAppWidgetProvider = if (pendingAppWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-            appWidgetManager.getAppWidgetInfo(pendingAppWidgetId)
-                ?: appWidgetManager.installedProviders.firstOrNull { it.provider == savedProvider }
-        } else null
         hideSystemBars()
 
         setContent {
@@ -375,7 +227,6 @@ class MainActivity : ComponentActivity() {
                                         isCarPlayPickerMode = appPickerTarget != null,
                                         carPlayPickerLabel  = when (appPickerTarget) {
                                             com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.ANDROID_AUTO -> "CHOOSE ANDROID AUTO APP"
-                                            com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.PIP          -> "CHOOSE PIP APP"
                                             com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.RADIO        -> "CHOOSE RADIO APP"
                                             else -> "CHOOSE CARPLAY APP"
                                         },
@@ -397,7 +248,7 @@ class MainActivity : ComponentActivity() {
                                         bluetoothDriverDevices = bluetoothDriverDevices,
                                         onRefreshBluetoothDriverDevices = vm::refreshBluetoothDriverDevices,
                                         onUpdate        = { block -> vm.updateSettings(block) },
-                                        onReset         = ::resetSettingsAndWidgets
+                                        onReset         = ::resetSettings
                                     )
                                 }
                             }
@@ -433,24 +284,13 @@ class MainActivity : ComponentActivity() {
         vm.refreshMedia()
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putInt(STATE_PENDING_APP_WIDGET_ID, pendingAppWidgetId)
-        outState.putString(
-            STATE_PENDING_APP_WIDGET_PROVIDER,
-            pendingAppWidgetProvider?.provider?.flattenToString()
-        )
-    }
-
     override fun onStop() {
         super.onStop()
-        runCatching { appWidgetHost.stopListening() }
         vm.stopLocationUpdates()
     }
 
     override fun onStart() {
         super.onStart()
-        runCatching { appWidgetHost.startListening() }
         vm.startLocationUpdates()
     }
 }

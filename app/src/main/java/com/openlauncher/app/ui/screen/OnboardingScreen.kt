@@ -355,7 +355,7 @@ private fun IntroStep(accent: Color) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             BulletItem(Icons.Default.CloudOff, "100% Offline-Based", "No reliance on a mobile signal or network connection to function. Speedometer, compass telemetry, and altimeter operate entirely offline.")
             BulletItem(Icons.Default.Palette, "Highly Customizable Dashboard", "Tailor color accents, background gradients, typography fonts, system units, and drag-and-drop to rearrange your tiles.")
-            BulletItem(Icons.Default.VolumeUp, "Soundboard & Media Shortcuts", "Trigger custom soundboard sound effects, manage CarPlay & Android Auto shortcuts, and control active media players.")
+            BulletItem(Icons.Default.VolumeUp, "Media Shortcuts", "Manage CarPlay and Android Auto shortcuts, and control active media players.")
         }
     }
 }

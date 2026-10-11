@@ -36,23 +36,14 @@ class SettingsRepository(private val context: Context) {
         val FONT_BOLD          = booleanPreferencesKey("font_bold")
         val TEXT_SCALE         = floatPreferencesKey("text_scale")
         val UI_SCALE           = floatPreferencesKey("ui_scale")
-        val CLOCK_STYLE        = stringPreferencesKey("clock_style")
         val UNIT_SYSTEM        = stringPreferencesKey("unit_system")
         val APP_FONT           = stringPreferencesKey("app_font")
-        val SHOW_WEATHER       = booleanPreferencesKey("show_weather")
         val WIDGET_OPACITY = floatPreferencesKey("widget_opacity")
         val WEATHER_WIDGET_OPACITY_LEGACY = floatPreferencesKey("weather_widget_opacity")
         val MANUAL_WEATHER_LOCATION_NAME = stringPreferencesKey("manual_weather_location_name")
         val MANUAL_WEATHER_LATITUDE = doublePreferencesKey("manual_weather_latitude")
         val MANUAL_WEATHER_LONGITUDE = doublePreferencesKey("manual_weather_longitude")
-        val SHOW_CLOCK         = booleanPreferencesKey("show_clock")
-        val SHOW_TELEMETRY     = booleanPreferencesKey("show_telemetry")
-        val SHOW_NOW_PLAYING   = booleanPreferencesKey("show_now_playing")
-        val SHOW_ALTIMETER     = booleanPreferencesKey("show_altimeter")
-        val SHOW_SPEEDOMETER   = booleanPreferencesKey("show_speedometer")
         val SHORTCUTS_JSON     = stringPreferencesKey("shortcuts_json")
-        val WIDGET_LAYOUT_JSON = stringPreferencesKey("widget_layout_json")
-        val EXTERNAL_WIDGETS_JSON = stringPreferencesKey("external_widgets_json")
         val CAR_PLAY_PACKAGE      = stringPreferencesKey("car_play_package")
         val ANDROID_AUTO_PACKAGE  = stringPreferencesKey("android_auto_package")
         val USE_GRADIENT          = booleanPreferencesKey("use_gradient")
@@ -63,20 +54,9 @@ class SettingsRepository(private val context: Context) {
         val SIDEBAR_SCALE              = floatPreferencesKey("sidebar_scale")
         val BOTTOM_BAR_SHORTCUTS_RIGHT = booleanPreferencesKey("bottom_bar_shortcuts_right")
         val DAY_NIGHT_MODE        = stringPreferencesKey("day_night_mode")
-        val SHOW_PIP              = booleanPreferencesKey("show_pip")
-        val PIP_APP_PACKAGE       = stringPreferencesKey("pip_app_package")
         val RADIO_PACKAGE         = stringPreferencesKey("radio_package")
         val ONBOARDING_COMPLETED  = booleanPreferencesKey("onboarding_completed")
-        val SHOW_VITALS           = booleanPreferencesKey("show_vitals")
-        val SHOW_TRIP_TRACKER     = booleanPreferencesKey("show_trip_tracker")
         val COMPASS_OFFSET        = floatPreferencesKey("compass_offset")
-        val SHOW_SOUNDBOARD       = booleanPreferencesKey("show_soundboard")
-        val SHOW_MUSIC_VISUALIZER = booleanPreferencesKey("show_music_visualizer")
-        val SHOW_QUICK_CONTROLS = booleanPreferencesKey("show_quick_controls")
-        val MUSIC_VISUALIZER_STYLE = stringPreferencesKey("music_visualizer_style")
-        val SOUNDBOARD_PADS_JSON  = stringPreferencesKey("soundboard_pads_json")
-        val VITALS_AS_BARS        = booleanPreferencesKey("vitals_as_bars")
-        val SPEEDOMETER_DIGITAL_ONLY = booleanPreferencesKey("speedometer_digital_only")
         val GRADIENT_DIRECTION    = stringPreferencesKey("gradient_direction")
         val USE_CUSTOM_BG_COLOR   = booleanPreferencesKey("use_custom_bg_color")
     }
@@ -96,27 +76,6 @@ class SettingsRepository(private val context: Context) {
                     )
                 }.getOrNull() ?: defaults.shortcuts
             } else defaults.shortcuts
-
-            val widgetJson = prefs[Keys.WIDGET_LAYOUT_JSON]
-            val widgets = if (widgetJson != null) {
-                val loaded = runCatching {
-                    gson.fromJson<List<WidgetConfig>>(
-                        widgetJson,
-                        object : TypeToken<List<WidgetConfig>>() {}.type
-                    )
-                }.getOrNull() ?: defaults.widgetLayout
-                // Migrate: old 2×2 layout has no widget with gridX≥2 — replace with new 3×2 default
-                if (loaded.none { it.gridX >= 2 }) defaults.widgetLayout else loaded
-            } else defaults.widgetLayout
-
-            val externalWidgets = prefs[Keys.EXTERNAL_WIDGETS_JSON]?.let {
-                runCatching {
-                    gson.fromJson<List<ExternalWidgetConfig>>(
-                        it,
-                        object : TypeToken<List<ExternalWidgetConfig>>() {}.type
-                    )
-                }.getOrNull()
-            } ?: defaults.externalWidgets
 
             return AppSettings(
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
@@ -151,10 +110,8 @@ class SettingsRepository(private val context: Context) {
                 fontBold       = prefs[Keys.FONT_BOLD]        ?: defaults.fontBold,
                 textScale      = prefs[Keys.TEXT_SCALE]       ?: defaults.textScale,
                 uiScale        = prefs[Keys.UI_SCALE]         ?: defaults.uiScale,
-                clockStyle     = prefs[Keys.CLOCK_STYLE]?.let { runCatching { ClockStyle.valueOf(it) }.getOrNull() } ?: defaults.clockStyle,
                 unitSystem     = prefs[Keys.UNIT_SYSTEM]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() } ?: defaults.unitSystem,
                 appFont        = prefs[Keys.APP_FONT]?.let { runCatching { AppFont.valueOf(it) }.getOrNull() } ?: defaults.appFont,
-                showWeather    = prefs[Keys.SHOW_WEATHER]     ?: defaults.showWeather,
                 widgetOpacity = (
                     prefs[Keys.WIDGET_OPACITY]
                         ?: prefs[Keys.WEATHER_WIDGET_OPACITY_LEGACY]
@@ -163,14 +120,7 @@ class SettingsRepository(private val context: Context) {
                 manualWeatherLocationName = prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] ?: defaults.manualWeatherLocationName,
                 manualWeatherLatitude = prefs[Keys.MANUAL_WEATHER_LATITUDE],
                 manualWeatherLongitude = prefs[Keys.MANUAL_WEATHER_LONGITUDE],
-                showClock      = prefs[Keys.SHOW_CLOCK]       ?: defaults.showClock,
-                showTelemetry  = prefs[Keys.SHOW_TELEMETRY]   ?: defaults.showTelemetry,
-                showNowPlaying = prefs[Keys.SHOW_NOW_PLAYING] ?: defaults.showNowPlaying,
-                showAltimeter   = prefs[Keys.SHOW_ALTIMETER]   ?: defaults.showAltimeter,
-                showSpeedometer = prefs[Keys.SHOW_SPEEDOMETER] ?: defaults.showSpeedometer,
                 shortcuts      = shortcuts,
-                widgetLayout   = widgets,
-                externalWidgets = externalWidgets,
                 carPlayPackage      = prefs[Keys.CAR_PLAY_PACKAGE]      ?: defaults.carPlayPackage,
                 androidAutoPackage  = prefs[Keys.ANDROID_AUTO_PACKAGE]  ?: defaults.androidAutoPackage,
                 useGradient      = prefs[Keys.USE_GRADIENT]        ?: defaults.useGradient,
@@ -181,26 +131,9 @@ class SettingsRepository(private val context: Context) {
                 sidebarScale     = (prefs[Keys.SIDEBAR_SCALE] ?: defaults.sidebarScale).coerceIn(1.0f, 1.5f),
                 bottomBarShortcutsRight = prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] ?: defaults.bottomBarShortcutsRight,
                 dayNightMode     = prefs[Keys.DAY_NIGHT_MODE]?.let { runCatching { DayNightMode.valueOf(it) }.getOrNull() } ?: defaults.dayNightMode,
-                showPip          = prefs[Keys.SHOW_PIP]         ?: defaults.showPip,
-                pipAppPackage    = prefs[Keys.PIP_APP_PACKAGE]  ?: defaults.pipAppPackage,
                 radioPackage     = prefs[Keys.RADIO_PACKAGE]    ?: defaults.radioPackage,
                 onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
-                showVitals       = prefs[Keys.SHOW_VITALS]      ?: defaults.showVitals,
-                showTripTracker  = prefs[Keys.SHOW_TRIP_TRACKER] ?: defaults.showTripTracker,
                 compassOffset    = prefs[Keys.COMPASS_OFFSET]    ?: defaults.compassOffset,
-                showSoundboard   = prefs[Keys.SHOW_SOUNDBOARD]   ?: defaults.showSoundboard,
-                showMusicVisualizer = prefs[Keys.SHOW_MUSIC_VISUALIZER] ?: defaults.showMusicVisualizer,
-                showQuickControls = prefs[Keys.SHOW_QUICK_CONTROLS] ?: defaults.showQuickControls,
-                musicVisualizerStyle = prefs[Keys.MUSIC_VISUALIZER_STYLE]?.let {
-                    runCatching { MusicVisualizerStyle.valueOf(it) }.getOrNull()
-                } ?: defaults.musicVisualizerStyle,
-                soundboardPads   = prefs[Keys.SOUNDBOARD_PADS_JSON]?.let {
-                    runCatching {
-                        gson.fromJson<List<SoundPadConfig>>(it, object : com.google.gson.reflect.TypeToken<List<SoundPadConfig>>() {}.type)
-                    }.getOrNull()
-                } ?: defaults.soundboardPads,
-                vitalsAsBars     = prefs[Keys.VITALS_AS_BARS] ?: defaults.vitalsAsBars,
-                speedometerDigitalOnly = prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] ?: defaults.speedometerDigitalOnly,
                 gradientDirection = prefs[Keys.GRADIENT_DIRECTION]?.let { runCatching { GradientDirection.valueOf(it) }.getOrNull() } ?: defaults.gradientDirection,
                 useCustomBackgroundColor = prefs[Keys.USE_CUSTOM_BG_COLOR] ?: defaults.useCustomBackgroundColor
             )
@@ -237,10 +170,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.FONT_BOLD]          = s.fontBold
             prefs[Keys.TEXT_SCALE]         = s.textScale
             prefs[Keys.UI_SCALE]           = s.uiScale
-            prefs[Keys.CLOCK_STYLE]        = s.clockStyle.name
             prefs[Keys.UNIT_SYSTEM]        = s.unitSystem.name
             prefs[Keys.APP_FONT]           = s.appFont.name
-            prefs[Keys.SHOW_WEATHER]       = s.showWeather
             prefs[Keys.WIDGET_OPACITY] = s.widgetOpacity.coerceIn(0f, 1f)
             prefs.remove(Keys.WEATHER_WIDGET_OPACITY_LEGACY)
             prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] = s.manualWeatherLocationName
@@ -248,14 +179,7 @@ class SettingsRepository(private val context: Context) {
                 ?: prefs.remove(Keys.MANUAL_WEATHER_LATITUDE)
             s.manualWeatherLongitude?.let { prefs[Keys.MANUAL_WEATHER_LONGITUDE] = it }
                 ?: prefs.remove(Keys.MANUAL_WEATHER_LONGITUDE)
-            prefs[Keys.SHOW_CLOCK]         = s.showClock
-            prefs[Keys.SHOW_TELEMETRY]     = s.showTelemetry
-            prefs[Keys.SHOW_NOW_PLAYING]   = s.showNowPlaying
-            prefs[Keys.SHOW_ALTIMETER]     = s.showAltimeter
-            prefs[Keys.SHOW_SPEEDOMETER]   = s.showSpeedometer
             prefs[Keys.SHORTCUTS_JSON]     = gson.toJson(s.shortcuts)
-            prefs[Keys.WIDGET_LAYOUT_JSON] = gson.toJson(s.widgetLayout)
-            prefs[Keys.EXTERNAL_WIDGETS_JSON] = gson.toJson(s.externalWidgets)
             prefs[Keys.CAR_PLAY_PACKAGE]      = s.carPlayPackage
             prefs[Keys.ANDROID_AUTO_PACKAGE]  = s.androidAutoPackage
             prefs[Keys.USE_GRADIENT]       = s.useGradient
@@ -265,20 +189,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SIDEBAR_SCALE]              = s.sidebarScale
             prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] = s.bottomBarShortcutsRight
             prefs[Keys.DAY_NIGHT_MODE]     = s.dayNightMode.name
-            prefs[Keys.SHOW_PIP]           = s.showPip
-            prefs[Keys.PIP_APP_PACKAGE]    = s.pipAppPackage
             prefs[Keys.RADIO_PACKAGE]      = s.radioPackage
             prefs[Keys.ONBOARDING_COMPLETED] = s.onboardingCompleted
-            prefs[Keys.SHOW_VITALS]        = s.showVitals
-            prefs[Keys.SHOW_TRIP_TRACKER]  = s.showTripTracker
             prefs[Keys.COMPASS_OFFSET]     = s.compassOffset
-            prefs[Keys.SHOW_SOUNDBOARD]    = s.showSoundboard
-            prefs[Keys.SHOW_MUSIC_VISUALIZER] = s.showMusicVisualizer
-            prefs[Keys.SHOW_QUICK_CONTROLS] = s.showQuickControls
-            prefs[Keys.MUSIC_VISUALIZER_STYLE] = s.musicVisualizerStyle.name
-            prefs[Keys.SOUNDBOARD_PADS_JSON] = gson.toJson(s.soundboardPads)
-            prefs[Keys.VITALS_AS_BARS]     = s.vitalsAsBars
-            prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] = s.speedometerDigitalOnly
             prefs[Keys.GRADIENT_DIRECTION] = s.gradientDirection.name
             prefs[Keys.USE_CUSTOM_BG_COLOR] = s.useCustomBackgroundColor
     }

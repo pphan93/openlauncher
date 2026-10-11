@@ -17,18 +17,10 @@ import com.openlauncher.app.data.AppUpdateManager
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.DefaultShortcutIcon
-import com.openlauncher.app.data.EXTERNAL_WIDGET_PREFIX
-import com.openlauncher.app.data.ExternalWidgetConfig
-import com.openlauncher.app.data.GRID_COLS
-import com.openlauncher.app.data.GRID_ROWS
 import com.openlauncher.app.data.SettingsRepository
 import com.openlauncher.app.data.ShortcutConfig
-import com.openlauncher.app.data.SoundPadConfig
 import com.openlauncher.app.data.WeatherApi
-import com.openlauncher.app.data.activeWidgetIds
-import com.openlauncher.app.data.computeWidgetMove
 import com.openlauncher.app.data.defaultShortcuts
-import com.openlauncher.app.data.externalWidgetLayoutId
 import com.openlauncher.app.util.SunriseSunset
 import com.openlauncher.app.model.AppInfo
 import com.openlauncher.app.model.DailyForecast
@@ -176,7 +168,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ── CarPlay / Android Auto picker ─────────────────────────────────────────
-    enum class AppPickerTarget { CARPLAY, ANDROID_AUTO, PIP, RADIO }
+    enum class AppPickerTarget { CARPLAY, ANDROID_AUTO, RADIO }
 
     private val _appPickerTarget = MutableStateFlow<AppPickerTarget?>(null)
     val carPlayPickerActive: StateFlow<Boolean> = MutableStateFlow(false) // kept for compat
@@ -192,11 +184,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _nav.value = NavDestination.APP_LIBRARY
     }
 
-    fun startPipPicker() {
-        _appPickerTarget.value = AppPickerTarget.PIP
-        _nav.value = NavDestination.APP_LIBRARY
-    }
-
     fun startRadioPicker() {
         _appPickerTarget.value = AppPickerTarget.RADIO
         _nav.value = NavDestination.APP_LIBRARY
@@ -206,7 +193,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         when (_appPickerTarget.value) {
             AppPickerTarget.CARPLAY      -> updateSettings { copy(carPlayPackage = app.packageName) }
             AppPickerTarget.ANDROID_AUTO -> updateSettings { copy(androidAutoPackage = app.packageName) }
-            AppPickerTarget.PIP          -> updateSettings { copy(pipAppPackage = app.packageName) }
             AppPickerTarget.RADIO        -> updateSettings { copy(radioPackage = app.packageName) }
             null -> {}
         }
@@ -216,205 +202,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun clearCarPlayApp()      { updateSettings { copy(carPlayPackage = "") } }
     fun clearAndroidAutoApp()  { updateSettings { copy(androidAutoPackage = "") } }
-    fun clearPipApp()          { updateSettings { copy(pipAppPackage = "") } }
     fun clearRadioApp()        { updateSettings { copy(radioPackage = "") } }
-
-    fun updateWidgetConfig(id: String, spanX: Int, spanY: Int) {
-        updateSettings {
-            val resized = widgetLayout.map { w ->
-                if (w.id == id) w.copy(
-                    spanX = spanX.coerceIn(1, GRID_COLS - w.gridX),
-                    spanY = spanY.coerceIn(1, GRID_ROWS - w.gridY)
-                ) else w
-            }
-            // Re-run collision resolution so enlarging a widget pushes neighbors
-            // aside instead of stacking on top of them
-            val activeIds = activeWidgetIds()
-            val active    = resized.filter { it.enabled && it.id in activeIds }
-            val inactive  = resized.filter { !it.enabled || it.id !in activeIds }
-            val target    = active.find { it.id == id }
-            copy(widgetLayout = if (target != null)
-                computeWidgetMove(active, id, target.gridX, target.gridY) + inactive
-            else resized)
-        }
-    }
-
-    fun moveWidgetConfig(id: String, gridX: Int, gridY: Int) {
-        updateSettings {
-            val activeIds = activeWidgetIds()
-            val active   = widgetLayout.filter { it.enabled && it.id in activeIds }
-            val inactive = widgetLayout.filter { !it.enabled || it.id !in activeIds }
-            copy(widgetLayout = computeWidgetMove(active, id, gridX, gridY) + inactive)
-        }
-    }
-
-    fun addWidget(id: String) {
-        updateSettings {
-            val activeIds = activeWidgetIds()
-            var layout    = widgetLayout
-            var cell      = freeCellIn(layout, activeIds)
-
-            // If grid is full, shrink the largest multi-cell widget by one span to make room
-            if (cell == null) {
-                val candidate = layout
-                    .filter { it.enabled && it.id in activeIds && it.spanX * it.spanY > 1 }
-                    .maxByOrNull { it.spanX * it.spanY }
-                if (candidate != null) {
-                    layout = layout.map { w ->
-                        if (w.id == candidate.id)
-                            if (w.spanY > 1) w.copy(spanY = w.spanY - 1) else w.copy(spanX = w.spanX - 1)
-                        else w
-                    }
-                    cell = freeCellIn(layout, activeIds)
-                }
-            }
-
-            val cell_ = cell ?: return@updateSettings this
-
-            val withShow = when (id) {
-                "CLOCK"       -> copy(showClock = true)
-                "WEATHER"     -> copy(showWeather = true)
-                "NOW_PLAYING" -> copy(showNowPlaying = true)
-                "TELEMETRY"   -> copy(showTelemetry = true)
-                "ALTIMETER"   -> copy(showAltimeter = true)
-                "SPEEDOMETER" -> copy(showSpeedometer = true)
-                "VITALS"      -> copy(showVitals = true)
-                "TRIP_TRACKER" -> copy(showTripTracker = true)
-                "SOUNDBOARD"  -> copy(showSoundboard = true)
-                "MUSIC_VISUALIZER" -> copy(showMusicVisualizer = true)
-                "QUICK_CONTROLS" -> copy(showQuickControls = true)
-                else          -> this
-            }
-            val idx       = layout.indexOfFirst { it.id == id }
-            val newLayout = if (idx >= 0) layout.toMutableList().also { list ->
-                val w = list[idx]
-                // Try to keep the widget's previous span; if no free area fits it,
-                // fall back to 1×1 at the free cell so it can't overlap neighbors
-                val area = if (w.spanX > 1 || w.spanY > 1) freeAreaIn(layout, activeIds, w.spanX, w.spanY) else null
-                list[idx] = if (area != null)
-                    w.copy(enabled = true, gridX = area.first, gridY = area.second)
-                else
-                    w.copy(enabled = true, gridX = cell_.first, gridY = cell_.second, spanX = 1, spanY = 1)
-            } else {
-                layout + com.openlauncher.app.data.WidgetConfig(id, cell_.first, cell_.second)
-            }
-            withShow.copy(widgetLayout = newLayout)
-        }
-    }
-
-    fun addExternalWidget(
-        widget: ExternalWidgetConfig,
-        preferredSpanX: Int,
-        preferredSpanY: Int
-    ) {
-        updateSettings {
-            val layoutId = externalWidgetLayoutId(widget.appWidgetId)
-            val activeIds = activeWidgetIds()
-            var layout = widgetLayout.filterNot { it.id == layoutId }
-
-            val wantedX = preferredSpanX.coerceIn(1, GRID_COLS)
-            val wantedY = preferredSpanY.coerceIn(1, GRID_ROWS)
-            var spanX = wantedX
-            var spanY = wantedY
-            var cell = freeAreaIn(layout, activeIds, spanX, spanY)
-
-            if (cell == null) {
-                spanX = 1
-                spanY = 1
-                cell = freeCellIn(layout, activeIds)
-            }
-
-            if (cell == null) {
-                val candidate = layout
-                    .filter { it.enabled && it.id in activeIds && it.spanX * it.spanY > 1 }
-                    .maxByOrNull { it.spanX * it.spanY }
-                if (candidate != null) {
-                    layout = layout.map { existing ->
-                        if (existing.id == candidate.id) {
-                            if (existing.spanY > 1) existing.copy(spanY = existing.spanY - 1)
-                            else existing.copy(spanX = existing.spanX - 1)
-                        } else existing
-                    }
-                    cell = freeCellIn(layout, activeIds)
-                }
-            }
-
-            val target = cell ?: return@updateSettings this
-            copy(
-                externalWidgets = externalWidgets.filterNot {
-                    it.appWidgetId == widget.appWidgetId
-                } + widget,
-                widgetLayout = layout + com.openlauncher.app.data.WidgetConfig(
-                    id = layoutId,
-                    gridX = target.first,
-                    gridY = target.second,
-                    spanX = spanX,
-                    spanY = spanY
-                )
-            )
-        }
-    }
-
-    fun removeWidget(id: String) {
-        updateSettings {
-            if (id.startsWith(EXTERNAL_WIDGET_PREFIX)) {
-                val appWidgetId = id.removePrefix(EXTERNAL_WIDGET_PREFIX).toIntOrNull()
-                return@updateSettings copy(
-                    externalWidgets = externalWidgets.filterNot { it.appWidgetId == appWidgetId },
-                    widgetLayout = widgetLayout.filterNot { it.id == id }
-                )
-            }
-            when (id) {
-                "CLOCK"       -> copy(showClock = false)
-                "WEATHER"     -> copy(showWeather = false)
-                "NOW_PLAYING" -> copy(showNowPlaying = false)
-                "TELEMETRY"   -> copy(showTelemetry = false)
-                "ALTIMETER"   -> copy(showAltimeter = false)
-                "SPEEDOMETER" -> copy(showSpeedometer = false)
-                "VITALS"      -> copy(showVitals = false)
-                "TRIP_TRACKER" -> copy(showTripTracker = false)
-                "SOUNDBOARD"  -> copy(showSoundboard = false)
-                "MUSIC_VISUALIZER" -> copy(showMusicVisualizer = false)
-                "QUICK_CONTROLS" -> copy(showQuickControls = false)
-                else          -> this
-            }
-        }
-    }
-
-    fun updateSoundboardPad(index: Int, pad: SoundPadConfig) {
-        updateSettings {
-            // Persisted lists from older versions may be shorter than the 6 pads
-            // the widget displays — pad before assigning to avoid IndexOutOfBounds
-            val padded = soundboardPads.toMutableList()
-            while (padded.size <= index) padded.add(SoundPadConfig("+", synthType = ""))
-            padded[index] = pad
-            copy(soundboardPads = padded)
-        }
-    }
-
-    private fun freeCellIn(
-        layout: List<com.openlauncher.app.data.WidgetConfig>,
-        activeIds: Set<String>
-    ): Pair<Int, Int>? = freeAreaIn(layout, activeIds, 1, 1)
-
-    private fun freeAreaIn(
-        layout: List<com.openlauncher.app.data.WidgetConfig>,
-        activeIds: Set<String>,
-        spanX: Int,
-        spanY: Int
-    ): Pair<Int, Int>? {
-        val occupied = buildSet<Pair<Int, Int>> {
-            layout.filter { it.enabled && it.id in activeIds }.forEach { w ->
-                for (dx in 0 until w.spanX) for (dy in 0 until w.spanY) add(w.gridX + dx to w.gridY + dy)
-            }
-        }
-        for (row in 0 until GRID_ROWS) for (col in 0 until GRID_COLS) {
-            if (col + spanX > GRID_COLS || row + spanY > GRID_ROWS) continue
-            if ((0 until spanX).all { dx -> (0 until spanY).all { dy -> (col + dx to row + dy) !in occupied } })
-                return col to row
-        }
-        return null
-    }
 
     fun cancelCarPlayPicker() {
         _appPickerTarget.value = null
