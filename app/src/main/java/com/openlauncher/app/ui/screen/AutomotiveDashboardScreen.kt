@@ -47,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -212,11 +213,10 @@ private fun DashboardHeader(
     }
     val time = remember(now) { SimpleDateFormat("h:mm a", Locale.getDefault()).format(now) }
     val date = remember(now) { SimpleDateFormat("EEEE | MMMM d, yyyy", Locale.getDefault()).format(now) }
-    Row(
+    Box(
         modifier = Modifier.fillMaxWidth().height(48.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.align(Alignment.CenterStart)) {
             Text(time, color = primary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
                 "$date  •  ${settings.manualWeatherLocationName.ifEmpty { "Current location" }}",
@@ -225,7 +225,18 @@ private fun DashboardHeader(
                 maxLines = 1
             )
         }
-        Spacer(Modifier.weight(1f))
+        if (settings.showVehicleNameInStatusBar && settings.vehicleName.isNotBlank()) {
+            Text(
+                text = settings.vehicleName.trim(),
+                color = primary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.38f)
+            )
+        }
         if (profilePhoto.imageUri.isNotEmpty()) {
             AsyncImage(
                 model = profilePhoto.imageUri,
@@ -235,10 +246,15 @@ private fun DashboardHeader(
                     profilePhoto.focusX.coerceIn(-1f, 1f),
                     profilePhoto.focusY.coerceIn(-1f, 1f)
                 ),
-                modifier = Modifier.size(32.dp).clip(CircleShape)
+                modifier = Modifier.align(Alignment.CenterEnd).size(32.dp).clip(CircleShape)
             )
         } else {
-            Icon(Icons.Default.AccountCircle, "Driver profile", tint = dashboardAccent, modifier = Modifier.size(32.dp))
+            Icon(
+                Icons.Default.AccountCircle,
+                "Driver profile",
+                tint = dashboardAccent,
+                modifier = Modifier.align(Alignment.CenterEnd).size(32.dp)
+            )
         }
     }
 }

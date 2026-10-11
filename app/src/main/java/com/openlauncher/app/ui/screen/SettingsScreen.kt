@@ -606,6 +606,22 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            SettingsRow(
+                label = "Show Vehicle Name",
+                sublabel = "Display it in the center of the dashboard status bar",
+                icon = Icons.Default.Visibility
+            ) {
+                Switch(
+                    checked = settings.showVehicleNameInStatusBar,
+                    onCheckedChange = { enabled ->
+                        onUpdate { copy(showVehicleNameInStatusBar = enabled) }
+                    },
+                    colors = switchColors(accent)
+                )
+            }
+
+            SettingsDivider()
+
             var plateInput by remember(settings.licensePlate) { mutableStateOf(settings.licensePlate) }
             SettingsRow(
                 label = "License Plate",

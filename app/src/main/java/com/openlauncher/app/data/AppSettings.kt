@@ -145,6 +145,7 @@ data class DriverProfilePhoto(
 
 data class AppSettings(
     val vehicleName: String = "MY CAR",
+    val showVehicleNameInStatusBar: Boolean = true,
     val licensePlate: String = "",
     val licensePlateRegion: LicensePlateRegion = LicensePlateRegion.ALBERTA,
     val licensePlateTextColor: Int = Color(0xFF101216).toArgb(),
