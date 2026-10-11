@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,8 @@ import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.WeatherState
+import com.openlauncher.app.model.VehicleData
+import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
@@ -67,6 +70,8 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val DashboardYellow = Color(0xFFF2F400)
+private val LocalDashboardAccent = staticCompositionLocalOf { DashboardYellow }
+private val LocalDashboardAccentContent = staticCompositionLocalOf { Color.Black }
 private val DashboardDarkBackground = Color(0xFF090A0A)
 private val DashboardDarkCard = Color(0xFF181919)
 private val DashboardLightBackground = Color(0xFFF0F1ED)
@@ -80,8 +85,8 @@ fun AutomotiveDashboardScreen(
     nowPlaying: NowPlayingState?,
     location: LocationData?,
     bearing: Float,
-    isWifi: Boolean,
-    isData: Boolean,
+    vehicleData: VehicleData,
+    profilePhoto: DriverProfilePhoto,
     isDayMode: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -92,12 +97,18 @@ fun AutomotiveDashboardScreen(
 ) {
     val background = if (isDayMode) DashboardLightBackground else DashboardDarkBackground
     val cardColor = if (isDayMode) DashboardLightCard else DashboardDarkCard
-    val primary = if (isDayMode) Color(0xFF171817) else Color.White
-    val secondary = if (isDayMode) Color(0xFF656963) else Color(0xFFA9ACA6)
+    val primary = if (isDayMode) Color(settings.dayFontColor) else Color(settings.fontColor)
+    val secondary = primary.copy(alpha = if (isDayMode) 0.62f else 0.68f)
     val cardAlpha = settings.widgetOpacity.coerceIn(0f, 1f)
     val visibleCard = cardColor.copy(alpha = cardColor.alpha * cardAlpha)
+    val dashboardAccent = Color(settings.dashboardAccentColor)
+    val dashboardAccentContent = if (dashboardAccent.luminance() > 0.42f) Color.Black else Color.White
 
-    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = Poppins)) {
+    CompositionLocalProvider(
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = Poppins),
+        LocalDashboardAccent provides dashboardAccent,
+        LocalDashboardAccentContent provides dashboardAccentContent
+    ) {
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -106,8 +117,7 @@ fun AutomotiveDashboardScreen(
         ) {
         DashboardHeader(
             settings = settings,
-            isWifi = isWifi,
-            isData = isData,
+            profilePhoto = profilePhoto,
             primary = primary,
             secondary = secondary
         )
@@ -122,7 +132,6 @@ fun AutomotiveDashboardScreen(
                 modifier = Modifier.weight(0.92f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                GreetingCard(settings.profileName, visibleCard, primary, secondary)
                 DashboardMusicCard(
                     state = nowPlaying,
                     cardColor = visibleCard,
@@ -133,7 +142,7 @@ fun AutomotiveDashboardScreen(
                     onPrev = onPrev,
                     onSeek = onSeek,
                     onOpen = onTapNowPlaying,
-                    modifier = Modifier.weight(0.95f)
+                    modifier = Modifier.weight(1.25f)
                 )
                 DashboardWeatherClimateCard(
                     state = weather,
@@ -141,7 +150,7 @@ fun AutomotiveDashboardScreen(
                     cardColor = visibleCard,
                     primary = primary,
                     secondary = secondary,
-                    modifier = Modifier.weight(1.45f)
+                    modifier = Modifier.weight(1.35f)
                 )
             }
 
@@ -168,10 +177,11 @@ fun AutomotiveDashboardScreen(
                 licensePlate = settings.licensePlate,
                 location = location,
                 bearing = bearing,
+                vehicleData = vehicleData,
                 metric = settings.unitSystem.name == "METRIC",
-                cardColor = visibleCard,
-                primary = primary,
-                secondary = secondary,
+                isDayMode = isDayMode,
+                themePrimary = primary,
+                themeSecondary = secondary,
                 modifier = Modifier.weight(0.98f).fillMaxHeight()
             )
         }
@@ -182,11 +192,11 @@ fun AutomotiveDashboardScreen(
 @Composable
 private fun DashboardHeader(
     settings: AppSettings,
-    isWifi: Boolean,
-    isData: Boolean,
+    profilePhoto: DriverProfilePhoto,
     primary: Color,
     secondary: Color
 ) {
+    val dashboardAccent = LocalDashboardAccent.current
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -196,14 +206,6 @@ private fun DashboardHeader(
     }
     val time = remember(now) { SimpleDateFormat("h:mm a", Locale.getDefault()).format(now) }
     val date = remember(now) { SimpleDateFormat("EEEE | MMMM d, yyyy", Locale.getDefault()).format(now) }
-    val connection = when {
-        settings.androidAutoPackage.isNotEmpty() -> "Android Auto"
-        settings.carPlayPackage.isNotEmpty() -> "CarPlay"
-        isWifi -> "Wi-Fi connected"
-        isData -> "Mobile data"
-        else -> "Bluetooth ready"
-    }
-
     Row(
         modifier = Modifier.fillMaxWidth().height(48.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -218,49 +220,19 @@ private fun DashboardHeader(
             )
         }
         Spacer(Modifier.weight(1f))
-        if (isWifi) Icon(Icons.Default.Wifi, "Wi-Fi", tint = secondary, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.Default.Bluetooth, "Bluetooth", tint = secondary, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(12.dp))
-        if (settings.profileImageUri.isNotEmpty()) {
+        if (profilePhoto.imageUri.isNotEmpty()) {
             AsyncImage(
-                model = settings.profileImageUri,
+                model = profilePhoto.imageUri,
                 contentDescription = "Driver profile",
                 contentScale = ContentScale.Crop,
+                alignment = androidx.compose.ui.BiasAlignment(
+                    profilePhoto.focusX.coerceIn(-1f, 1f),
+                    profilePhoto.focusY.coerceIn(-1f, 1f)
+                ),
                 modifier = Modifier.size(32.dp).clip(CircleShape)
             )
         } else {
-            Icon(Icons.Default.AccountCircle, "Driver profile", tint = DashboardYellow, modifier = Modifier.size(32.dp))
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(settings.profileName, color = primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(connection, color = secondary, fontSize = 8.sp)
-        }
-    }
-}
-
-@Composable
-private fun GreetingCard(name: String, cardColor: Color, primary: Color, secondary: Color) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .clip(DashboardRadius)
-            .background(cardColor)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier.size(34.dp).clip(CircleShape).background(DashboardYellow),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.WbSunny, null, tint = Color.Black, modifier = Modifier.size(19.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text("Hi ${name.ifEmpty { "Driver" }},", color = primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text("ready for the road?", color = secondary, fontSize = 8.sp)
+            Icon(Icons.Default.AccountCircle, "Driver profile", tint = dashboardAccent, modifier = Modifier.size(32.dp))
         }
     }
 }
@@ -278,6 +250,8 @@ private fun DashboardMusicCard(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val dashboardAccent = LocalDashboardAccent.current
+    val dashboardAccentContent = LocalDashboardAccentContent.current
     val duration = state?.controller?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0L) ?: 0L
     var position by remember(state) { mutableLongStateOf(state?.controller?.playbackState?.position ?: 0L) }
     var dragging by remember { mutableStateOf(false) }
@@ -294,30 +268,41 @@ private fun DashboardMusicCard(
     val elapsedLabel = if (duration > 0L) formatPlaybackTime(safePosition) else "--:--"
     val durationLabel = if (duration > 0L) formatPlaybackTime(duration) else "--:--"
 
-    Column(
+    BoxWithConstraints(
         modifier = modifier.fillMaxWidth().clip(DashboardRadius).background(cardColor)
-            .clickable(onClick = onOpen).padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .clickable(onClick = onOpen)
     ) {
+        val compact = maxHeight < 190.dp
+        val artworkSize = if (compact) 48.dp else 68.dp
+        val horizontalPadding = if (compact) 12.dp else 18.dp
+        val verticalPadding = if (compact) 10.dp else 16.dp
+        val controlSize = if (compact) 30.dp else 34.dp
+        val playSize = if (compact) 38.dp else 44.dp
+        val controlIconSize = if (compact) 18.dp else 22.dp
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = verticalPadding),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (state?.albumArt != null) {
                 Image(
                     bitmap = state.albumArt.asImageBitmap(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.size(artworkSize).clip(RoundedCornerShape(8.dp))
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(68.dp).clip(RoundedCornerShape(8.dp)).background(DashboardYellow),
+                    modifier = Modifier.size(artworkSize).clip(RoundedCornerShape(8.dp)).background(dashboardAccent),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.MusicNote, null, tint = Color.Black, modifier = Modifier.size(29.dp)) }
+                ) { Icon(Icons.Default.MusicNote, null, tint = dashboardAccentContent, modifier = Modifier.size(if (compact) 23.dp else 29.dp)) }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(if (compact) 10.dp else 16.dp))
             Column(Modifier.weight(1f)) {
-                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                Text(state?.artist.orEmpty(), color = secondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(state?.title?.ifEmpty { "Tap to open music" } ?: "Tap to open music", color = primary, fontSize = if (compact) 12.sp else 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!compact) Spacer(Modifier.height(3.dp))
+                Text(state?.artist.orEmpty(), color = secondary, fontSize = if (compact) 9.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -326,43 +311,43 @@ private fun DashboardMusicCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(22.dp))
+            IconButton(onClick = onPrev, modifier = Modifier.size(controlSize)) {
+                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(controlIconSize))
             }
             IconButton(
                 onClick = {
                     if (duration > 0L) onSeek((safePosition - 10_000L).coerceAtLeast(0L))
                 },
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(controlSize)
             ) {
-                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(21.dp))
+                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
             }
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(DashboardYellow)
+                modifier = Modifier.size(playSize).clip(CircleShape).background(dashboardAccent)
             ) {
                 Icon(
                     if (state?.isPlaying == true) Icons.Default.Pause else Icons.Default.PlayArrow,
                     "Play or pause",
-                    tint = Color.Black,
-                    modifier = Modifier.size(25.dp)
+                    tint = dashboardAccentContent,
+                    modifier = Modifier.size(if (compact) 22.dp else 25.dp)
                 )
             }
             IconButton(
                 onClick = {
                     if (duration > 0L) onSeek((safePosition + 10_000L).coerceAtMost(duration))
                 },
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(controlSize)
             ) {
-                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(21.dp))
+                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
             }
-            IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(22.dp))
+            IconButton(onClick = onNext, modifier = Modifier.size(controlSize)) {
+                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(controlIconSize))
             }
         }
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(elapsedLabel, color = secondary, fontSize = 10.sp)
+            Text(elapsedLabel, color = secondary, fontSize = if (compact) 8.sp else 10.sp)
             ReferenceSeekBar(
                 progress = if (duration > 0) (safePosition.toFloat() / duration).coerceIn(0f, 1f) else 0f,
                 enabled = duration > 0,
@@ -374,9 +359,10 @@ private fun DashboardMusicCard(
                     if (duration > 0) onSeek(position)
                     dragging = false
                 },
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = if (compact) 5.dp else 8.dp)
             )
-            Text(durationLabel, color = secondary, fontSize = 10.sp)
+            Text(durationLabel, color = secondary, fontSize = if (compact) 8.sp else 10.sp)
+        }
         }
     }
 }
@@ -389,6 +375,7 @@ private fun ReferenceSeekBar(
     onProgressFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val dashboardAccent = LocalDashboardAccent.current
     val clampedProgress = progress.coerceIn(0f, 1f)
     Canvas(
         modifier = modifier.height(24.dp).pointerInput(enabled) {
@@ -427,14 +414,14 @@ private fun ReferenceSeekBar(
         )
         if (enabled) {
             drawLine(
-                color = DashboardYellow,
+                color = dashboardAccent,
                 start = Offset(trackStart, centerY),
                 end = Offset(thumbX, centerY),
                 strokeWidth = trackWidth,
                 cap = StrokeCap.Round
             )
             drawCircle(
-                color = DashboardYellow,
+                color = dashboardAccent,
                 radius = 5.dp.toPx(),
                 center = Offset(thumbX, centerY)
             )
@@ -639,6 +626,7 @@ private fun PhotoCarouselCard(
     secondary: Color,
     modifier: Modifier = Modifier
 ) {
+    val dashboardAccent = LocalDashboardAccent.current
     var index by remember(photoUris) { mutableIntStateOf(0) }
     LaunchedEffect(photoUris) {
         while (photoUris.size > 1) {
@@ -652,7 +640,7 @@ private fun PhotoCarouselCard(
     ) {
         if (photoUris.isEmpty()) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.PhotoLibrary, null, tint = DashboardYellow, modifier = Modifier.size(44.dp))
+                Icon(Icons.Default.PhotoLibrary, null, tint = dashboardAccent, modifier = Modifier.size(44.dp))
                 Spacer(Modifier.height(10.dp))
                 Text("PHOTO JOURNEY", color = primary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text("Choose local, Google Photos, or Drive images in Settings", color = secondary, fontSize = 8.sp)
@@ -692,6 +680,7 @@ private fun DashboardCalendarCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val dashboardAccent = LocalDashboardAccent.current
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
@@ -721,7 +710,7 @@ private fun DashboardCalendarCard(
     ) {
         Box(
             Modifier.width(3.dp).fillMaxHeight().clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF5BE27D), DashboardYellow, Color(0xFFFFBE73))))
+                .background(Brush.verticalGradient(listOf(Color(0xFF5BE27D), dashboardAccent, Color(0xFFFFBE73))))
         )
         Spacer(Modifier.width(18.dp))
         Icon(Icons.Default.CalendarMonth, null, tint = primary, modifier = Modifier.size(27.dp))
@@ -837,26 +826,48 @@ private fun VehicleStatusCard(
     licensePlate: String,
     location: LocationData?,
     bearing: Float,
+    vehicleData: VehicleData,
     metric: Boolean,
-    cardColor: Color,
-    primary: Color,
-    secondary: Color,
+    isDayMode: Boolean,
+    themePrimary: Color,
+    themeSecondary: Color,
     modifier: Modifier = Modifier
 ) {
     val heading = compassHeading(bearing)
     val speed = ((location?.speedMps ?: 0f) * if (metric) 3.6f else 2.23694f).coerceAtLeast(0f)
     val speedUnit = if (metric) "km/h" else "mph"
     val rangeUnit = if (metric) "km" else "mi"
+    val fuelPercent = vehicleData.fuelPercent?.coerceIn(0f, 100f)
+    val displayedRange = vehicleData.rangeKm?.let { if (metric) it else it * 0.621371f }
+    val doorStatus = vehicleData.doors?.let { if (it.anyOpen) "OPEN" else "CLOSED" } ?: "NO DATA"
+    val doorIcon = if (vehicleData.doors?.anyOpen == true) Icons.Default.LockOpen else Icons.Default.Lock
+    val vehiclePrimary = themePrimary
+    val vehicleSecondary = themeSecondary
+    val vehicleBackground = if (isDayMode) Color(0xFFE8EEF6) else Color(0xFF0B111C)
+    val sceneGradient = if (isDayMode) {
+        listOf(Color(0xFFF7FBFF), Color(0xFFDCE9F7), Color(0xFFB8C9DD))
+    } else {
+        listOf(Color(0xFF080B12), Color(0xFF242A40), Color(0xFF080D17))
+    }
+    val distantMountainColor = if (isDayMode) Color(0xFFC8D5E4) else Color(0xFF151C31).copy(alpha = 0.76f)
+    val valleyColor = if (isDayMode) Color(0xFFAAB9CC) else Color(0xFF0A1224).copy(alpha = 0.96f)
+    val laneColor = if (isDayMode) Color(0xFF4D5FE4) else Color(0xFF5863E8)
+    val telemetryBackground = if (isDayMode) Color(0xFFF6F9FD).copy(alpha = 0.96f) else Color(0xFF111827).copy(alpha = 0.96f)
+    val statusBackground = if (isDayMode) Color(0xFFF4F7FB) else Color(0xFF111722)
+    val fuelAccent = if (isDayMode) Color(0xFF16865F) else Color(0xFF43E6B0)
+    val doorAccent = if (isDayMode) Color(0xFF1976A8) else Color(0xFF7ACBFA)
+    val compassAccent = if (isDayMode) Color(0xFF7048CF) else Color(0xFFAD80FF)
+    val fuelSideAccent = if (isDayMode) Color(0xFF16865F) else Color(0xFF55D893)
 
     Column(
-        modifier = modifier.clip(DashboardRadius).background(Color(0xFF0B111C)),
+        modifier = modifier.clip(DashboardRadius).background(vehicleBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier.fillMaxWidth().weight(1f)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF080B12), Color(0xFF242A40), Color(0xFF080D17))
+                        sceneGradient
                     )
                 )
         ) {
@@ -878,7 +889,7 @@ private fun VehicleStatusCard(
                     lineTo(0f, size.height)
                     close()
                 }
-                drawPath(distantMountains, Color(0xFF151C31).copy(alpha = 0.76f))
+                drawPath(distantMountains, distantMountainColor)
 
                 val foregroundValley = Path().apply {
                     moveTo(0f, horizon + size.height * 0.015f)
@@ -901,15 +912,15 @@ private fun VehicleStatusCard(
                     lineTo(0f, size.height)
                     close()
                 }
-                drawPath(foregroundValley, Color(0xFF0A1224).copy(alpha = 0.96f))
+                drawPath(foregroundValley, valleyColor)
                 drawLine(
-                    color = Color(0xFF5863E8).copy(alpha = 0.68f),
+                    color = laneColor.copy(alpha = if (isDayMode) 0.78f else 0.68f),
                     start = Offset(size.width * 0.44f, size.height * 0.45f),
                     end = Offset(size.width * 0.03f, size.height * 0.91f),
                     strokeWidth = 1.4.dp.toPx()
                 )
                 drawLine(
-                    color = Color(0xFF5863E8).copy(alpha = 0.68f),
+                    color = laneColor.copy(alpha = if (isDayMode) 0.78f else 0.68f),
                     start = Offset(size.width * 0.56f, size.height * 0.45f),
                     end = Offset(size.width * 0.97f, size.height * 0.91f),
                     strokeWidth = 1.4.dp.toPx()
@@ -921,12 +932,12 @@ private fun VehicleStatusCard(
             ) {
                 Text(
                     speed.roundToInt().toString(),
-                    color = primary,
+                    color = vehiclePrimary,
                     fontSize = 64.sp,
                     fontWeight = FontWeight.Light,
                     lineHeight = 66.sp
                 )
-                Text(speedUnit, color = secondary, fontSize = 12.sp, fontWeight = FontWeight.Light)
+                Text(speedUnit, color = vehicleSecondary, fontSize = 12.sp, fontWeight = FontWeight.Light)
             }
 
             Box(
@@ -959,31 +970,48 @@ private fun VehicleStatusCard(
             Row(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 9.dp)
                     .fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF111827).copy(alpha = 0.96f)).padding(horizontal = 11.dp, vertical = 10.dp),
+                    .background(telemetryBackground).padding(horizontal = 11.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Outlined.WaterDrop, null, tint = Color(0xFF43E6B0), modifier = Modifier.size(15.dp))
+                Icon(Icons.Outlined.WaterDrop, null, tint = fuelAccent, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(5.dp))
-                Text("--%", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    fuelPercent?.roundToInt()?.let { "$it%" } ?: "--%",
+                    color = vehiclePrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
                 Box(
                     Modifier.padding(horizontal = 10.dp).weight(1f).height(3.dp)
-                        .clip(CircleShape).background(secondary.copy(alpha = 0.18f))
+                        .clip(CircleShape).background(vehicleSecondary.copy(alpha = 0.24f))
+                ) {
+                    if (fuelPercent != null) {
+                        Box(
+                            Modifier.fillMaxHeight().fillMaxWidth(fuelPercent / 100f)
+                                .background(fuelAccent)
+                        )
+                    }
+                }
+                Text(
+                    displayedRange?.roundToInt()?.let { "$it $rangeUnit" } ?: "-- $rangeUnit",
+                    color = vehiclePrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
                 )
-                Text("-- $rangeUnit", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         }
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp)
-                .clip(RoundedCornerShape(11.dp)).background(Color(0xFF111722)).padding(vertical = 10.dp),
+                .clip(RoundedCornerShape(11.dp)).background(statusBackground).padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            VehicleStatusItem(Icons.Default.Lock, "DOORS", "NO DATA", Color(0xFF7ACBFA), primary, secondary)
-            VerticalDivider(Modifier.height(36.dp), color = secondary.copy(alpha = 0.14f))
-            VehicleStatusItem(Icons.Outlined.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", Color(0xFFAD80FF), primary, secondary)
-            VerticalDivider(Modifier.height(36.dp), color = secondary.copy(alpha = 0.14f))
-            VehicleStatusItem(Icons.Default.LocalGasStation, "FUEL SIDE", "LEFT", Color(0xFF55D893), primary, secondary)
+            VehicleStatusItem(doorIcon, "DOORS", doorStatus, doorAccent, vehiclePrimary, vehicleSecondary)
+            VerticalDivider(Modifier.height(36.dp), color = vehicleSecondary.copy(alpha = 0.22f))
+            VehicleStatusItem(Icons.Outlined.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", compassAccent, vehiclePrimary, vehicleSecondary)
+            VerticalDivider(Modifier.height(36.dp), color = vehicleSecondary.copy(alpha = 0.22f))
+            VehicleStatusItem(Icons.Default.LocalGasStation, "FUEL SIDE", "LEFT", fuelSideAccent, vehiclePrimary, vehicleSecondary)
         }
     }
 }

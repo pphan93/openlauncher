@@ -221,6 +221,9 @@ class MainActivity : ComponentActivity() {
             val weather     by vm.weather.collectAsStateWithLifecycle()
             val location    by vm.location.collectAsStateWithLifecycle()
             val bearing     by vm.compassBearing.collectAsStateWithLifecycle()
+            val vehicleData by vm.vehicleData.collectAsStateWithLifecycle()
+            val bluetoothDriverDevices by vm.bluetoothDriverDevices.collectAsStateWithLifecycle()
+            val activeProfilePhoto by vm.activeProfilePhoto.collectAsStateWithLifecycle()
             val isWifi      by vm.isWifi.collectAsStateWithLifecycle()
             val isData      by vm.isData.collectAsStateWithLifecycle()
             val isDayModeVM by vm.isDayMode.collectAsStateWithLifecycle()
@@ -239,7 +242,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 if (isDayMode) Color(0xFFEEEEEE) else Color.Black
             }
-            val textColor      = if (isDayMode) Color(0xFF111111) else Color(settings.fontColor)
+            val textColor      = if (isDayMode) Color(settings.dayFontColor) else Color(settings.fontColor)
             val bgGradientEnd  = Color(settings.gradientEndColor)
             val bgBrush        = if (settings.useCustomBackgroundColor && settings.useGradient) {
                 val colors = listOf(bg, bgGradientEnd)
@@ -352,8 +355,8 @@ class MainActivity : ComponentActivity() {
                                         nowPlaying = nowPlaying,
                                         location = location,
                                         bearing = bearing,
-                                        isWifi = isWifi,
-                                        isData = isData,
+                                        vehicleData = vehicleData,
+                                        profilePhoto = activeProfilePhoto,
                                         isDayMode = isDayMode,
                                         onPlayPause = vm::playPause,
                                         onNext = vm::skipNext,
@@ -391,6 +394,8 @@ class MainActivity : ComponentActivity() {
                                         manualWeatherLocationState = manualWeatherLocationState,
                                         onSetManualWeatherLocation = vm::setManualWeatherLocation,
                                         onClearManualWeatherLocation = vm::clearManualWeatherLocation,
+                                        bluetoothDriverDevices = bluetoothDriverDevices,
+                                        onRefreshBluetoothDriverDevices = vm::refreshBluetoothDriverDevices,
                                         onUpdate        = { block -> vm.updateSettings(block) },
                                         onReset         = ::resetSettingsAndWidgets
                                     )

@@ -22,10 +22,16 @@ class SettingsRepository(private val context: Context) {
         val LICENSE_PLATE      = stringPreferencesKey("license_plate")
         val PROFILE_NAME       = stringPreferencesKey("profile_name")
         val PROFILE_IMAGE_URI  = stringPreferencesKey("profile_image_uri")
+        val PROFILE_IMAGE_FOCUS_X = floatPreferencesKey("profile_image_focus_x")
+        val PROFILE_IMAGE_FOCUS_Y = floatPreferencesKey("profile_image_focus_y")
+        val AUTO_BLUETOOTH_DRIVER_PHOTO = booleanPreferencesKey("auto_bluetooth_driver_photo")
+        val BLUETOOTH_DRIVER_PROFILES_JSON = stringPreferencesKey("bluetooth_driver_profiles_json")
         val DASHBOARD_PHOTO_URIS = stringPreferencesKey("dashboard_photo_uris")
         val ACCENT_COLOR       = intPreferencesKey("accent_color")
+        val DASHBOARD_ACCENT_COLOR = intPreferencesKey("dashboard_accent_color")
         val BG_COLOR           = intPreferencesKey("bg_color")
         val FONT_COLOR         = intPreferencesKey("font_color")
+        val DAY_FONT_COLOR     = intPreferencesKey("day_font_color")
         val WALLPAPER_URI      = stringPreferencesKey("wallpaper_uri")
         val FONT_BOLD          = booleanPreferencesKey("font_bold")
         val TEXT_SCALE         = floatPreferencesKey("text_scale")
@@ -117,14 +123,30 @@ class SettingsRepository(private val context: Context) {
                 licensePlate   = prefs[Keys.LICENSE_PLATE]     ?: defaults.licensePlate,
                 profileName    = prefs[Keys.PROFILE_NAME]     ?: defaults.profileName,
                 profileImageUri = prefs[Keys.PROFILE_IMAGE_URI] ?: defaults.profileImageUri,
+                profileImageFocusX = (prefs[Keys.PROFILE_IMAGE_FOCUS_X]
+                    ?: defaults.profileImageFocusX).coerceIn(-1f, 1f),
+                profileImageFocusY = (prefs[Keys.PROFILE_IMAGE_FOCUS_Y]
+                    ?: defaults.profileImageFocusY).coerceIn(-1f, 1f),
+                autoBluetoothDriverPhoto = prefs[Keys.AUTO_BLUETOOTH_DRIVER_PHOTO]
+                    ?: defaults.autoBluetoothDriverPhoto,
+                bluetoothDriverProfiles = prefs[Keys.BLUETOOTH_DRIVER_PROFILES_JSON]?.let {
+                    runCatching {
+                        gson.fromJson<List<BluetoothDriverProfile>>(
+                            it,
+                            object : TypeToken<List<BluetoothDriverProfile>>() {}.type
+                        )
+                    }.getOrNull()
+                } ?: defaults.bluetoothDriverProfiles,
                 dashboardPhotoUris = prefs[Keys.DASHBOARD_PHOTO_URIS]?.let {
                     runCatching {
                         gson.fromJson<List<String>>(it, object : TypeToken<List<String>>() {}.type)
                     }.getOrNull()
                 } ?: defaults.dashboardPhotoUris,
                 accentColor    = prefs[Keys.ACCENT_COLOR]     ?: defaults.accentColor,
+                dashboardAccentColor = prefs[Keys.DASHBOARD_ACCENT_COLOR] ?: defaults.dashboardAccentColor,
                 backgroundColor = prefs[Keys.BG_COLOR]        ?: defaults.backgroundColor,
                 fontColor      = prefs[Keys.FONT_COLOR]       ?: defaults.fontColor,
+                dayFontColor   = prefs[Keys.DAY_FONT_COLOR]   ?: defaults.dayFontColor,
                 wallpaperUri   = prefs[Keys.WALLPAPER_URI]    ?: defaults.wallpaperUri,
                 fontBold       = prefs[Keys.FONT_BOLD]        ?: defaults.fontBold,
                 textScale      = prefs[Keys.TEXT_SCALE]       ?: defaults.textScale,
@@ -201,10 +223,16 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.LICENSE_PLATE]      = s.licensePlate
             prefs[Keys.PROFILE_NAME]       = s.profileName
             prefs[Keys.PROFILE_IMAGE_URI]  = s.profileImageUri
+            prefs[Keys.PROFILE_IMAGE_FOCUS_X] = s.profileImageFocusX.coerceIn(-1f, 1f)
+            prefs[Keys.PROFILE_IMAGE_FOCUS_Y] = s.profileImageFocusY.coerceIn(-1f, 1f)
+            prefs[Keys.AUTO_BLUETOOTH_DRIVER_PHOTO] = s.autoBluetoothDriverPhoto
+            prefs[Keys.BLUETOOTH_DRIVER_PROFILES_JSON] = gson.toJson(s.bluetoothDriverProfiles)
             prefs[Keys.DASHBOARD_PHOTO_URIS] = gson.toJson(s.dashboardPhotoUris)
             prefs[Keys.ACCENT_COLOR]       = s.accentColor
+            prefs[Keys.DASHBOARD_ACCENT_COLOR] = s.dashboardAccentColor
             prefs[Keys.BG_COLOR]           = s.backgroundColor
             prefs[Keys.FONT_COLOR]         = s.fontColor
+            prefs[Keys.DAY_FONT_COLOR]     = s.dayFontColor
             prefs[Keys.WALLPAPER_URI]      = s.wallpaperUri
             prefs[Keys.FONT_BOLD]          = s.fontBold
             prefs[Keys.TEXT_SCALE]         = s.textScale

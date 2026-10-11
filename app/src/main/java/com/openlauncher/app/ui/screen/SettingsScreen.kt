@@ -1,12 +1,17 @@
 package com.openlauncher.app.ui.screen
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,14 +25,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.openlauncher.app.data.AppFont
 import com.openlauncher.app.BuildConfig
 import com.openlauncher.app.data.AppSettings
+import com.openlauncher.app.data.BluetoothDriverProfile
 import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.ShortcutConfig
@@ -35,12 +48,23 @@ import com.openlauncher.app.data.GradientDirection
 import com.openlauncher.app.data.UnitSystem
 import com.openlauncher.app.ui.theme.LocalDayMode
 import com.openlauncher.app.util.SunriseSunset
+import com.openlauncher.app.util.BluetoothDriverDevice
+import com.openlauncher.app.util.clearPrivateImportDirectory
+import com.openlauncher.app.util.compatibleFilePickerIntent
+import com.openlauncher.app.util.importFileToPrivateStorage
+import com.openlauncher.app.util.selectedUris
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import com.openlauncher.app.ui.components.ColorPickerDialog
 import com.openlauncher.app.ui.components.ConfirmDialog
 import com.openlauncher.app.viewmodel.LauncherViewModel
 import com.openlauncher.app.viewmodel.UpdateStatus
+
+private data class PendingProfileCrop(
+    val imageUri: String,
+    val device: BluetoothDriverDevice? = null
+)
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
 
@@ -54,68 +78,174 @@ fun SettingsScreen(
     manualWeatherLocationState: LauncherViewModel.ManualWeatherLocationState,
     onSetManualWeatherLocation: (String) -> Unit,
     onClearManualWeatherLocation: () -> Unit,
+    bluetoothDriverDevices: List<BluetoothDriverDevice>,
+    onRefreshBluetoothDriverDevices: () -> Unit,
     onUpdate: (AppSettings.() -> AppSettings) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showResetDialog       by remember { mutableStateOf(false) }
     var showAccentPicker      by remember { mutableStateOf(false) }
+    var showDashboardAccentPicker by remember { mutableStateOf(false) }
     var showBgPicker          by remember { mutableStateOf(false) }
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
+    var showDayFontColorPicker by remember { mutableStateOf(false) }
+    var pendingBluetoothPhotoDevice by remember { mutableStateOf<BluetoothDriverDevice?>(null) }
+    var pendingProfileCrop by remember { mutableStateOf<PendingProfileCrop?>(null) }
+    var bluetoothPermissionGranted by remember {
+        mutableStateOf(
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.BLUETOOTH_CONNECT
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        bluetoothPermissionGranted = granted
+        if (granted) onRefreshBluetoothDriverDevices()
+    }
 
     LaunchedEffect(Unit) {
         if (updateStatus == UpdateStatus.Idle) onCheckUpdates()
     }
 
-    // OpenDocument (not GetContent): only SAF document URIs carry a persistable
-    // grant, so this is what actually keeps the wallpaper readable after reboot
     val wallpaperPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        selectedUris(result.data).firstOrNull()?.let { uri ->
+            coroutineScope.launch {
+                val imported = importFileToPrivateStorage(
+                    context, uri, "wallpaper", "wallpaper", replaceExisting = true
                 )
+                if (imported != null) {
+                    onUpdate { copy(wallpaperUri = imported.uri) }
+                } else {
+                    Toast.makeText(context, "The selected wallpaper could not be opened", Toast.LENGTH_LONG).show()
+                }
             }
-            onUpdate { copy(wallpaperUri = it.toString()) }
         }
     }
 
     val profileImagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    it, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        selectedUris(result.data).firstOrNull()?.let { uri ->
+            coroutineScope.launch {
+                val imported = importFileToPrivateStorage(
+                    context,
+                    uri,
+                    "profile_photo",
+                    "profile_${System.currentTimeMillis()}"
                 )
+                if (imported != null) {
+                    pendingProfileCrop = PendingProfileCrop(imported.uri)
+                } else {
+                    Toast.makeText(context, "The selected profile photo could not be opened", Toast.LENGTH_LONG).show()
+                }
             }
-            onUpdate { copy(profileImageUri = it.toString()) }
         }
     }
 
-    // DocumentsUI includes local storage and installed cloud providers such as
-    // Google Photos and Google Drive, while keeping read access after reboot.
-    val dashboardPhotosPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            uris.forEach { uri ->
-                runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+    val bluetoothProfileImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val device = pendingBluetoothPhotoDevice
+        pendingBluetoothPhotoDevice = null
+        if (device != null) {
+            selectedUris(result.data).firstOrNull()?.let { uri ->
+                coroutineScope.launch {
+                    val safeAddress = device.address.filter(Char::isLetterOrDigit)
+                    val imported = importFileToPrivateStorage(
+                        context,
+                        uri,
+                        "bluetooth_driver_photos",
+                        "driver_${safeAddress}_${System.currentTimeMillis()}"
                     )
+                    if (imported != null) {
+                        pendingProfileCrop = PendingProfileCrop(imported.uri, device)
+                    } else {
+                        Toast.makeText(context, "The selected driver photo could not be opened", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
-            onUpdate { copy(dashboardPhotoUris = uris.map(Uri::toString)) }
+        }
+    }
+
+    // Some Android head units omit DocumentsUI entirely. Use a custom activity
+    // result so we can fall back to any installed gallery or file manager.
+    val dashboardPhotosPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uris = selectedUris(result.data)
+            if (uris.isNotEmpty()) {
+                coroutineScope.launch {
+                    val imported = uris.mapIndexedNotNull { index, uri ->
+                        importFileToPrivateStorage(
+                            context, uri, "dashboard_photos", "photo_$index"
+                        )?.uri
+                    }
+                    if (imported.isNotEmpty()) {
+                        val retained = imported.toSet()
+                        withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            java.io.File(context.filesDir, "dashboard_photos").listFiles()?.forEach { file ->
+                                if (Uri.fromFile(file).toString() !in retained) file.delete()
+                            }
+                        }
+                        onUpdate { copy(dashboardPhotoUris = imported) }
+                    } else {
+                        Toast.makeText(context, "The selected photos could not be opened", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
     }
 
     val isDayMode = LocalDayMode.current
     val screenBg  = MaterialTheme.colorScheme.background
+
+    pendingProfileCrop?.let { pending ->
+        ProfilePhotoPositionDialog(
+            imageUri = pending.imageUri,
+            accent = accent,
+            onDismiss = { pendingProfileCrop = null },
+            onConfirm = { focusX, focusY ->
+                val device = pending.device
+                if (device == null) {
+                    onUpdate {
+                        copy(
+                            profileImageUri = pending.imageUri,
+                            profileImageFocusX = focusX,
+                            profileImageFocusY = focusY
+                        )
+                    }
+                } else {
+                    onUpdate {
+                        copy(
+                            autoBluetoothDriverPhoto = true,
+                            bluetoothDriverProfiles = bluetoothDriverProfiles
+                                .filterNot { it.deviceAddress.equals(device.address, ignoreCase = true) } +
+                                BluetoothDriverProfile(
+                                    deviceAddress = device.address,
+                                    deviceName = device.name,
+                                    imageUri = pending.imageUri,
+                                    focusX = focusX,
+                                    focusY = focusY
+                                )
+                        )
+                    }
+                }
+                pendingProfileCrop = null
+            }
+        )
+    }
 
     Box(
         modifier = modifier
@@ -133,7 +263,7 @@ fun SettingsScreen(
         Text(
             text          = "SETTINGS",
             style         = MaterialTheme.typography.titleLarge,
-            color         = if (isDayMode) Color(0xFF111111) else accent,
+            color         = if (isDayMode) MaterialTheme.colorScheme.onBackground else accent,
             letterSpacing = 3.sp,
             fontSize      = 14.sp
         )
@@ -312,17 +442,113 @@ fun SettingsScreen(
                 sublabel = if (settings.profileImageUri.isEmpty()) "Choose a driver image" else "Driver image selected",
                 icon = Icons.Default.AddAPhoto,
                 accent = accent,
-                onClick = { profileImagePicker.launch(arrayOf("image/*")) }
+                onClick = {
+                    launchCompatiblePicker(context, profileImagePicker, "image/*")
+                }
             )
             if (settings.profileImageUri.isNotEmpty()) {
                 TextButton(
-                    onClick = { onUpdate { copy(profileImageUri = "") } },
+                    onClick = {
+                        coroutineScope.launch {
+                            clearPrivateImportDirectory(context, "profile_photo")
+                            onUpdate {
+                                copy(
+                                    profileImageUri = "",
+                                    profileImageFocusX = 0f,
+                                    profileImageFocusY = 0f
+                                )
+                            }
+                        }
+                    },
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text("REMOVE PROFILE PHOTO", color = Color(0xFF993333), fontSize = 9.sp)
                 }
             }
             SettingsDivider()
+            SettingsRow(
+                label = "Auto-switch Driver Photo",
+                sublabel = "Use the photo assigned to the connected Bluetooth device",
+                icon = Icons.Default.Bluetooth
+            ) {
+                Switch(
+                    checked = settings.autoBluetoothDriverPhoto,
+                    onCheckedChange = { enabled ->
+                        onUpdate { copy(autoBluetoothDriverPhoto = enabled) }
+                        if (enabled && !bluetoothPermissionGranted &&
+                            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                        ) {
+                            bluetoothPermissionLauncher.launch(android.Manifest.permission.BLUETOOTH_CONNECT)
+                        } else if (enabled) {
+                            onRefreshBluetoothDriverDevices()
+                        }
+                    },
+                    colors = switchColors(accent)
+                )
+            }
+
+            if (settings.autoBluetoothDriverPhoto) {
+                if (!bluetoothPermissionGranted) {
+                    SettingsButton(
+                        label = "Allow Bluetooth Access",
+                        sublabel = "Required to identify the connected driver device",
+                        icon = Icons.Default.BluetoothSearching,
+                        accent = accent,
+                        onClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                bluetoothPermissionLauncher.launch(android.Manifest.permission.BLUETOOTH_CONNECT)
+                            }
+                        }
+                    )
+                } else if (bluetoothDriverDevices.isEmpty()) {
+                    Text(
+                        "No paired Android Bluetooth devices found. Pair the phone in system Bluetooth settings, then reopen this page.",
+                        color = if (isDayMode) Color(0xFF777777) else Color(0xFF777777),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(vertical = 10.dp)
+                    )
+                } else {
+                    bluetoothDriverDevices.forEachIndexed { index, device ->
+                        val mapping = settings.bluetoothDriverProfiles.firstOrNull {
+                            it.deviceAddress.equals(device.address, ignoreCase = true)
+                        }
+                        if (index > 0) SettingsDivider()
+                        SettingsRow(
+                            label = device.name,
+                            sublabel = buildString {
+                                append(if (device.connected) "Connected" else "Paired")
+                                append(if (mapping != null) " • Photo assigned" else " • No photo")
+                            },
+                            icon = if (device.connected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    pendingBluetoothPhotoDevice = device
+                                    launchCompatiblePicker(context, bluetoothProfileImagePicker, "image/*")
+                                }
+                            ) {
+                                Text(if (mapping == null) "SET PHOTO" else "CHANGE", color = accent, fontSize = 9.sp)
+                            }
+                            if (mapping != null) {
+                                IconButton(
+                                    onClick = {
+                                        onUpdate {
+                                            copy(bluetoothDriverProfiles = bluetoothDriverProfiles.filterNot {
+                                                it.deviceAddress.equals(device.address, ignoreCase = true)
+                                            })
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.DeleteOutline, "Remove driver photo", tint = Color(0xFF993333), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+                SettingsDivider()
+            }
+
             SettingsButton(
                 label = "Dashboard Photos",
                 sublabel = if (settings.dashboardPhotoUris.isEmpty()) {
@@ -332,11 +558,18 @@ fun SettingsScreen(
                 },
                 icon = Icons.Default.Collections,
                 accent = accent,
-                onClick = { dashboardPhotosPicker.launch(arrayOf("image/*")) }
+                onClick = {
+                    launchCompatiblePicker(context, dashboardPhotosPicker, "image/*", allowMultiple = true)
+                }
             )
             if (settings.dashboardPhotoUris.isNotEmpty()) {
                 TextButton(
-                    onClick = { onUpdate { copy(dashboardPhotoUris = emptyList()) } },
+                    onClick = {
+                        coroutineScope.launch {
+                            clearPrivateImportDirectory(context, "dashboard_photos")
+                            onUpdate { copy(dashboardPhotoUris = emptyList()) }
+                        }
+                    },
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text("CLEAR DASHBOARD PHOTOS", color = Color(0xFF993333), fontSize = 9.sp)
@@ -666,6 +899,22 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            SettingsRow(
+                label = "Dashboard Accent",
+                sublabel = "Replaces the yellow automotive highlights",
+                icon = Icons.Default.DirectionsCar
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(settings.dashboardAccentColor))
+                        .clickable { showDashboardAccentPicker = true }
+                )
+            }
+
+            SettingsDivider()
+
             // Background color + gradient
             SettingsRow(
                 label    = "Background",
@@ -737,6 +986,22 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            SettingsRow(
+                label = "Day Font Color",
+                sublabel = "Custom text color in day mode",
+                icon = Icons.Default.LightMode
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(settings.dayFontColor))
+                        .clickable { showDayFontColorPicker = true }
+                )
+            }
+
+            SettingsDivider()
+
             SettingsRow(label = "Use Gradient", sublabel = "Blend two colors as background", icon = Icons.Default.Gradient) {
                 Switch(checked = settings.useGradient,
                     onCheckedChange = { onUpdate { copy(useGradient = it) } },
@@ -790,7 +1055,7 @@ fun SettingsScreen(
                 sublabel = if (settings.wallpaperUri.isNotEmpty()) "Custom wallpaper active" else "Choose image from gallery",
                 icon     = Icons.Default.Wallpaper,
                 accent   = accent,
-                onClick  = { wallpaperPicker.launch(arrayOf("image/*")) }
+                onClick  = { launchCompatiblePicker(context, wallpaperPicker, "image/*") }
             )
             if (settings.wallpaperUri.isNotEmpty()) {
                 Column {
@@ -809,7 +1074,12 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     TextButton(
-                        onClick  = { onUpdate { copy(wallpaperUri = "") } },
+                        onClick  = {
+                            coroutineScope.launch {
+                                clearPrivateImportDirectory(context, "wallpaper")
+                                onUpdate { copy(wallpaperUri = "") }
+                            }
+                        },
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Text("REMOVE WALLPAPER", color = Color(0xFF993333), fontSize = 9.sp, letterSpacing = 1.sp)
@@ -1056,6 +1326,15 @@ fun SettingsScreen(
         )
     }
 
+    if (showDashboardAccentPicker) {
+        ColorPickerDialog(
+            title = "Dashboard Accent",
+            initialColor = Color(settings.dashboardAccentColor),
+            onColorSelected = { color -> onUpdate { copy(dashboardAccentColor = color.toArgb()) } },
+            onDismiss = { showDashboardAccentPicker = false }
+        )
+    }
+
     if (showBgPicker) {
         ColorPickerDialog(
             title           = "Background Color",
@@ -1096,9 +1375,35 @@ fun SettingsScreen(
             onDismiss       = { showFontColorPicker = false }
         )
     }
+
+    if (showDayFontColorPicker) {
+        ColorPickerDialog(
+            title = "Day Font Color",
+            initialColor = Color(settings.dayFontColor),
+            onColorSelected = { color -> onUpdate { copy(dayFontColor = color.toArgb()) } },
+            onDismiss = { showDayFontColorPicker = false }
+        )
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+private fun launchCompatiblePicker(
+    context: android.content.Context,
+    launcher: ActivityResultLauncher<Intent>,
+    mimeType: String,
+    allowMultiple: Boolean = false
+) {
+    val pickerIntent = compatibleFilePickerIntent(context, mimeType, allowMultiple)
+    if (pickerIntent == null) {
+        Toast.makeText(context, "No compatible gallery or file manager is installed", Toast.LENGTH_LONG).show()
+    } else {
+        runCatching { launcher.launch(pickerIntent) }
+            .onFailure {
+                Toast.makeText(context, "Unable to open the file picker", Toast.LENGTH_LONG).show()
+            }
+    }
+}
 
 @Composable
 private fun SettingsSection(
@@ -1123,6 +1428,86 @@ private fun SettingsSection(
 }
 
 @Composable
+private fun ProfilePhotoPositionDialog(
+    imageUri: String,
+    accent: Color,
+    onDismiss: () -> Unit,
+    onConfirm: (Float, Float) -> Unit
+) {
+    var focusX by remember(imageUri) { mutableFloatStateOf(0f) }
+    var focusY by remember(imageUri) { mutableFloatStateOf(0f) }
+    var previewSize by remember { mutableStateOf(IntSize.Zero) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("POSITION DRIVER PHOTO", fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Drag the photo until the face is centered",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    fontSize = 10.sp
+                )
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    modifier = Modifier
+                        .size(190.dp)
+                        .onSizeChanged { previewSize = it }
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.Black)
+                        .pointerInput(imageUri, previewSize) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                if (previewSize.width > 0 && previewSize.height > 0) {
+                                    focusX = (focusX - dragAmount.x * 2f / previewSize.width).coerceIn(-1f, 1f)
+                                    focusY = (focusY - dragAmount.y * 2f / previewSize.height).coerceIn(-1f, 1f)
+                                }
+                            }
+                        }
+                        .border(2.dp, accent, androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    AsyncImage(
+                        model = imageUri,
+                        contentDescription = "Driver photo positioning preview",
+                        contentScale = ContentScale.Crop,
+                        alignment = androidx.compose.ui.BiasAlignment(focusX, focusY),
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = { focusX = 0f; focusY = 0f }) {
+                    Text("CENTER", color = accent, fontSize = 9.sp)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("CANCEL", fontSize = 10.sp)
+                    }
+                    Button(
+                        onClick = { onConfirm(focusX, focusY) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accent,
+                            contentColor = if (accent.luminance() > 0.45f) Color.Black else Color.White
+                        )
+                    ) {
+                        Text("USE PHOTO", fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsRow(
     label: String,
     sublabel: String = "",
@@ -1130,7 +1515,7 @@ private fun SettingsRow(
     content: @Composable RowScope.() -> Unit
 ) {
     val isDayMode   = LocalDayMode.current
-    val labelColor  = if (isDayMode) Color(0xFF111111) else Color(0xFFDDDDDD)
+    val labelColor  = if (isDayMode) MaterialTheme.colorScheme.onBackground else Color(0xFFDDDDDD)
     val subColor    = if (isDayMode) Color(0xFF888888) else Color(0xFF444444)
     val iconTint    = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
     Row(
@@ -1159,7 +1544,7 @@ private fun ColumnScope.SettingsButton(
     onClick: () -> Unit
 ) {
     val isDayMode  = LocalDayMode.current
-    val labelColor = if (isDayMode) Color(0xFF111111) else Color(0xFFDDDDDD)
+    val labelColor = if (isDayMode) MaterialTheme.colorScheme.onBackground else Color(0xFFDDDDDD)
     val subColor   = if (isDayMode) Color(0xFF888888) else Color(0xFF444444)
     val chevronC   = if (isDayMode) Color(0xFFBBBBBB) else Color(0xFF2A2A2A)
     val iconTint   = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
@@ -1190,7 +1575,7 @@ private fun ColumnScope.SettingsDivider() {
 @Composable
 private fun outlinedFieldColors(accent: Color): androidx.compose.material3.TextFieldColors {
     val isDayMode = LocalDayMode.current
-    val textColor = if (isDayMode) Color(0xFF111111) else Color.White
+    val textColor = if (isDayMode) MaterialTheme.colorScheme.onBackground else Color.White
     val borderU   = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF2A2A2A)
     return OutlinedTextFieldDefaults.colors(
         focusedBorderColor   = accent,

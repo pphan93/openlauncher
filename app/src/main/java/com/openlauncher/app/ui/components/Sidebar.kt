@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
@@ -52,6 +53,7 @@ import kotlin.math.roundToInt
 private val ICON_SIZE   = 22.dp
 private val SLOT_SIZE   = 52.dp
 private val HORIZONTAL_SLOT_SIZE = 88.dp
+private val VERTICAL_DASHBOARD_SLOT_SIZE = 70.dp
 
 /** A theme-tintable CarPlay-style mark: an open circular ring around Play. */
 private val CarPlayIcon: ImageVector = ImageVector.Builder(
@@ -157,13 +159,13 @@ fun Sidebar(
     modifier: Modifier = Modifier
 ) {
     val isDayMode    = LocalDayMode.current
-    val accent       = if (isHorizontal) Color(0xFFF2F400) else Color(settings.accentColor)
+    val accent       = Color(settings.dashboardAccentColor)
     val sidebarBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF181919)
-    val iconInactive = if (isDayMode) Color(0xFF777777) else Color(0xFFB4B7B2)
+    val iconInactive = if (isDayMode) Color(settings.dayFontColor).copy(alpha = 0.68f) else Color(settings.fontColor).copy(alpha = 0.72f)
     val dividerColor = if (isDayMode) Color(0xFFCCCCCC) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
     val density      = LocalDensity.current
     val slotSizePx   = with(density) {
-        (if (isHorizontal) HORIZONTAL_SLOT_SIZE else SLOT_SIZE).toPx()
+        (if (isHorizontal) HORIZONTAL_SLOT_SIZE else VERTICAL_DASHBOARD_SLOT_SIZE).toPx()
     }
 
     var actionSheetSlot by remember { mutableStateOf<Int?>(null) }
@@ -205,6 +207,8 @@ fun Sidebar(
                 isDragging      = isDragging,
                 dragTranslation = translation,
                 isHorizontal    = isHorizontal,
+                dashboardStyle = true,
+                iconColor = iconInactive,
                 onClick         = { onShortcutClick(index) },
                 onLongPress     = {
                     if (shortcut.packageName.isNotEmpty()) {
@@ -237,6 +241,7 @@ fun Sidebar(
             accent       = accent,
             iconInactive = iconInactive,
             isHorizontal = isHorizontal,
+            dashboardStyle = true,
             onClick      = { onNavigate(NavDestination.APP_LIBRARY) }
         )
         NavButton(
@@ -246,6 +251,7 @@ fun Sidebar(
             accent       = accent,
             iconInactive = iconInactive,
             isHorizontal = isHorizontal,
+            dashboardStyle = true,
             onClick      = { onNavigate(NavDestination.SETTINGS) }
         )
         NavButton(
@@ -255,6 +261,7 @@ fun Sidebar(
             accent       = accent,
             iconInactive = iconInactive,
             isHorizontal = isHorizontal,
+            dashboardStyle = true,
             onClick      = { onNavigate(NavDestination.HOME) }
         )
     }
@@ -277,13 +284,13 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true) {
+                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true, true) {
                     onNavigate(NavDestination.HOME)
                 }
-                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true) {
+                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true, true) {
                     onNavigate(NavDestination.APP_LIBRARY)
                 }
-                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true) {
+                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true, true) {
                     onNavigate(NavDestination.SETTINGS)
                 }
                 shortcutsContent(settings.shortcuts.indices.toList())
@@ -291,27 +298,33 @@ fun Sidebar(
 
         }
     } else {
-        Column(
+        Box(
             modifier = modifier
-                .width(56.dp)
+                .width(84.dp)
                 .fillMaxHeight()
-                .background(sidebarBg),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A))
+                .padding(horizontal = 7.dp, vertical = 8.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(sidebarBg)
                     .verticalScroll(rememberScrollState())
-                    .padding(top = 6.dp, bottom = 2.dp),
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, false, true) {
+                    onNavigate(NavDestination.HOME)
+                }
+                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, false, true) {
+                    onNavigate(NavDestination.APP_LIBRARY)
+                }
+                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, false, true) {
+                    onNavigate(NavDestination.SETTINGS)
+                }
                 shortcutsContent(settings.shortcuts.indices.toList())
             }
-
-            HorizontalDivider(color = dividerColor)
-            navButtons()
-            Spacer(Modifier.height(4.dp))
         }
     }
 
@@ -363,6 +376,8 @@ private fun ShortcutSlot(
     isDragging: Boolean,
     dragTranslation: Float,
     isHorizontal: Boolean,
+    dashboardStyle: Boolean,
+    iconColor: Color,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     onDragStart: () -> Unit,
@@ -380,7 +395,8 @@ private fun ShortcutSlot(
         modifier = Modifier
             .then(
                 if (isHorizontal) Modifier.fillMaxHeight().width(HORIZONTAL_SLOT_SIZE)
-                else              Modifier.fillMaxWidth().height(SLOT_SIZE)
+                else if (dashboardStyle) Modifier.fillMaxWidth().height(VERTICAL_DASHBOARD_SLOT_SIZE)
+                else Modifier.fillMaxWidth().height(SLOT_SIZE)
             )
             .zIndex(if (isDragging) 1f else 0f)
             .graphicsLayer {
@@ -428,14 +444,13 @@ private fun ShortcutSlot(
             }
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            val iconInactive = if (LocalDayMode.current) Color(0xFF777777) else Color(0xFF8B8E89)
             val override = shortcut.customIconOverride
             when {
             override != null && override != DefaultShortcutIcon.NONE -> {
                 Icon(
                     imageVector        = override.toIcon(),
                     contentDescription = shortcut.label,
-                    tint               = iconInactive,
+                    tint               = iconColor,
                     modifier           = Modifier.size(ICON_SIZE)
                 )
             }
@@ -446,7 +461,7 @@ private fun ShortcutSlot(
                 Icon(
                     painter            = BitmapPainter(bmp.asImageBitmap()),
                     contentDescription = shortcut.label,
-                    tint               = Color.Unspecified,
+                    tint               = iconColor,
                     modifier           = Modifier.size(26.dp)
                 )
             }
@@ -454,7 +469,7 @@ private fun ShortcutSlot(
                 Icon(
                     imageVector        = shortcut.defaultIcon.toIcon(),
                     contentDescription = shortcut.label,
-                    tint               = iconInactive,
+                    tint               = iconColor,
                     modifier           = Modifier.size(ICON_SIZE)
                 )
             }
@@ -462,16 +477,16 @@ private fun ShortcutSlot(
                 Icon(
                     imageVector        = Icons.Default.Add,
                     contentDescription = "Add shortcut",
-                    tint               = if (LocalDayMode.current) Color(0xFFBBBBBB) else Color(0xFF252525),
+                    tint               = iconColor.copy(alpha = 0.42f),
                     modifier           = Modifier.size(ICON_SIZE)
                 )
             }
             }
-            if (isHorizontal) {
+            if (isHorizontal || dashboardStyle) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = shortcut.label.ifEmpty { "Add" },
-                    color = iconInactive,
+                    color = iconColor,
                     fontSize = 7.sp,
                     fontFamily = Poppins,
                     maxLines = 1,
@@ -676,22 +691,26 @@ private fun NavButton(
     accent: Color,
     iconInactive: Color,
     isHorizontal: Boolean = false,
+    dashboardStyle: Boolean = false,
     onClick: () -> Unit
 ) {
     val isDayMode = LocalDayMode.current
-    val activeIconColor = if (isHorizontal) Color.Black else if (isDayMode) Color(0xFF111111) else Color.White
-    val activeBg = if (isHorizontal) Color(0xFFF2F400) else if (isDayMode) Color(0xFF000000).copy(alpha = 0.08f) else Color.White.copy(alpha = 0.06f)
+    val activeIconColor = if (dashboardStyle) {
+        if (accent.luminance() > 0.42f) Color.Black else Color.White
+    } else if (isDayMode) Color(0xFF111111) else Color.White
+    val activeBg = if (dashboardStyle) accent else if (isDayMode) Color(0xFF000000).copy(alpha = 0.08f) else Color.White.copy(alpha = 0.06f)
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .then(
                 if (isHorizontal) Modifier.padding(horizontal = 4.dp, vertical = 7.dp).fillMaxHeight().width(HORIZONTAL_SLOT_SIZE).clip(RoundedCornerShape(14.dp))
-                else              Modifier.fillMaxWidth().height(SLOT_SIZE)
+                else if (dashboardStyle) Modifier.padding(horizontal = 6.dp, vertical = 4.dp).fillMaxWidth().height(VERTICAL_DASHBOARD_SLOT_SIZE).clip(RoundedCornerShape(14.dp))
+                else Modifier.fillMaxWidth().height(SLOT_SIZE)
             )
             .background(if (isActive) activeBg else Color.Transparent)
             .clickable(onClick = onClick)
     ) {
-        if (isHorizontal) {
+        if (isHorizontal || dashboardStyle) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(
                     imageVector = icon,

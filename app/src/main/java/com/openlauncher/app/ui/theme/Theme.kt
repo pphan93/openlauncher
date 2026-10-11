@@ -35,10 +35,10 @@ fun OpenLauncherTheme(
         tertiary         = accent.copy(alpha = 0.5f),
         background       = if (useCustomBg) background else Color(0xFFEEEEEE),
         surface          = Color(0xFFFFFFFF),
-        onBackground     = Color(0xFF111111),
-        onSurface        = Color(0xFF111111),
+        onBackground     = textColor,
+        onSurface        = textColor,
         surfaceVariant   = Color(0xFFF5F5F5),
-        onSurfaceVariant = Color(0xFF666666),
+        onSurfaceVariant = textColor.copy(alpha = 0.68f),
         outline          = Color(0xFFCCCCCC)
     ) else darkColorScheme(
         primary          = accent,

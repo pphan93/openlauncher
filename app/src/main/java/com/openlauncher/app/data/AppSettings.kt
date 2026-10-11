@@ -170,15 +170,35 @@ data class ExternalWidgetConfig(
     val label: String
 )
 
+data class BluetoothDriverProfile(
+    val deviceAddress: String,
+    val deviceName: String,
+    val imageUri: String,
+    val focusX: Float = 0f,
+    val focusY: Float = 0f
+)
+
+data class DriverProfilePhoto(
+    val imageUri: String = "",
+    val focusX: Float = 0f,
+    val focusY: Float = 0f
+)
+
 data class AppSettings(
     val vehicleName: String = "MY CAR",
     val licensePlate: String = "",
     val profileName: String = "Driver",
     val profileImageUri: String = "",
+    val profileImageFocusX: Float = 0f,
+    val profileImageFocusY: Float = 0f,
+    val autoBluetoothDriverPhoto: Boolean = false,
+    val bluetoothDriverProfiles: List<BluetoothDriverProfile> = emptyList(),
     val dashboardPhotoUris: List<String> = emptyList(),
     val accentColor: Int = Color.White.toArgb(),
+    val dashboardAccentColor: Int = Color(0xFFF2F400).toArgb(),
     val backgroundColor: Int = Color.Black.toArgb(),
     val fontColor: Int = Color.White.toArgb(),
+    val dayFontColor: Int = Color(0xFF111111).toArgb(),
     val wallpaperUri: String = "",
     val fontBold: Boolean = false,
     val textScale: Float = 1.2f,

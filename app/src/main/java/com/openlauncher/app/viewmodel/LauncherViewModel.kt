@@ -15,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.AppUpdateManager
 import com.openlauncher.app.data.DayNightMode
+import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.DefaultShortcutIcon
 import com.openlauncher.app.data.EXTERNAL_WIDGET_PREFIX
 import com.openlauncher.app.data.ExternalWidgetConfig
@@ -34,9 +35,13 @@ import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
+import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.service.MediaListenerService
 import com.openlauncher.app.util.LocationCompassManager
 import com.openlauncher.app.util.LocationData
+import com.openlauncher.app.util.BluetoothDriverDevice
+import com.openlauncher.app.util.BluetoothDriverManager
+import com.openlauncher.app.util.VehicleDataManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -51,6 +56,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val settingsRepo = SettingsRepository(application)
     private val updateManager = AppUpdateManager(application, viewModelScope)
     private val locationMgr  = LocationCompassManager(application)
+    private val bluetoothDriverMgr = BluetoothDriverManager(application)
+    private val vehicleDataMgr = VehicleDataManager(application)
+
+    val vehicleData: StateFlow<VehicleData> = vehicleDataMgr.data
+    val bluetoothDriverDevices: StateFlow<List<BluetoothDriverDevice>> = bluetoothDriverMgr.devices
 
     val updateStatus: StateFlow<UpdateStatus> = updateManager.status
 
@@ -65,6 +75,31 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val settings: StateFlow<AppSettings> = settingsRepo.settingsFlow
         .onEach { _settingsLoaded.value = true }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    val activeProfilePhoto: StateFlow<DriverProfilePhoto> = combine(
+        settings,
+        bluetoothDriverDevices
+    ) { currentSettings, devices ->
+        if (!currentSettings.autoBluetoothDriverPhoto) {
+            DriverProfilePhoto(
+                currentSettings.profileImageUri,
+                currentSettings.profileImageFocusX,
+                currentSettings.profileImageFocusY
+            )
+        } else {
+            val connectedAddresses = devices.filter { it.connected }.mapTo(mutableSetOf()) { it.address }
+            currentSettings.bluetoothDriverProfiles.firstOrNull {
+                it.deviceAddress.uppercase() in connectedAddresses
+            }?.let { DriverProfilePhoto(it.imageUri, it.focusX, it.focusY) }
+                ?: DriverProfilePhoto(
+                    currentSettings.profileImageUri,
+                    currentSettings.profileImageFocusX,
+                    currentSettings.profileImageFocusY
+                )
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DriverProfilePhoto())
+
+    fun refreshBluetoothDriverDevices() = bluetoothDriverMgr.refresh()
 
     fun updateSettings(block: AppSettings.() -> AppSettings) {
         viewModelScope.launch { settingsRepo.updateSettings { it.block() } }
@@ -814,6 +849,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         super.onCleared()
         locationMgr.stop()
+        bluetoothDriverMgr.stop()
+        vehicleDataMgr.stop()
         radioObserver?.let { getApplication<Application>().contentResolver.unregisterContentObserver(it) }
         radioObserver = null
     }
@@ -821,6 +858,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     init {
         loadInstalledApps()
         refreshConnectivity()
+        bluetoothDriverMgr.start()
+        vehicleDataMgr.start()
         if (hasSzchoicewayMcu) startHardwareRadioObserver()
         // Prefer live GPS, but fall back to the manually saved location when the
         // head unit has no fix. Refresh when the source changes and every 30 minutes.

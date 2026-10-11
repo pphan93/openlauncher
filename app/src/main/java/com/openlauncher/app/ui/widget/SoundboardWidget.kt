@@ -1,7 +1,7 @@
 package com.openlauncher.app.ui.widget
 
-import android.content.Intent
 import android.media.MediaPlayer
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.openlauncher.app.data.SoundPadConfig
+import com.openlauncher.app.util.compatibleFilePickerIntent
+import com.openlauncher.app.util.importFileToPrivateStorage
+import com.openlauncher.app.util.selectedUris
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -156,19 +160,26 @@ private fun PadAssignDialog(
     var labelText   by remember { mutableStateOf(pad.label) }
     var synthType   by remember { mutableStateOf(pad.synthType) }
     var audioUri    by remember { mutableStateOf(pad.audioUri) }
+    val coroutineScope = rememberCoroutineScope()
 
     val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        selectedUris(result.data).firstOrNull()?.let { uri ->
+            coroutineScope.launch {
+                val imported = importFileToPrivateStorage(
+                    context = context,
+                    source = uri,
+                    directoryName = "soundboard_audio",
+                    baseName = "sound"
                 )
+                if (imported != null) {
+                    audioUri = imported.uri
+                    labelText = imported.displayName.substringBeforeLast('.').take(12)
+                } else {
+                    Toast.makeText(context, "The selected audio file could not be opened", Toast.LENGTH_LONG).show()
+                }
             }
-            audioUri = uri.toString()
-            val rawName = uri.path?.substringAfterLast('/') ?: "custom_sound"
-            labelText = rawName.substringAfterLast(':').substringBeforeLast('.')
         }
     }
 
@@ -260,7 +271,21 @@ private fun PadAssignDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedButton(
-                        onClick = { filePicker.launch(arrayOf("audio/*")) },
+                        onClick = {
+                            val pickerIntent = compatibleFilePickerIntent(context, "audio/*")
+                            if (pickerIntent == null) {
+                                Toast.makeText(
+                                    context,
+                                    "No compatible audio picker or file manager is installed",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                runCatching { filePicker.launch(pickerIntent) }
+                                    .onFailure {
+                                        Toast.makeText(context, "Unable to open the audio picker", Toast.LENGTH_LONG).show()
+                                    }
+                            }
+                        },
                         modifier = Modifier.weight(1f).height(30.dp),
                         shape = RoundedCornerShape(2.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
