@@ -4,13 +4,18 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Bundle
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.model.VehicleDoorState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * Common read-only vehicle data entry point.
@@ -25,6 +30,8 @@ class VehicleDataManager(context: Context) {
     private val _data = MutableStateFlow(VehicleData())
     val data: StateFlow<VehicleData> = _data.asStateFlow()
     private var registered = false
+    private var nwdReceiverRegistered = false
+    private var nwdDiscoveryStarted = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -33,6 +40,13 @@ class VehicleDataManager(context: Context) {
                 ACTION_CHOICEWAY_DOORS -> readChoicewayDoors(intent)
                 else -> readCommonPayload(intent)
             }
+        }
+    }
+
+    private val nwdReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent ?: return
+            readCommonPayload(intent, source = "NWD CAN")
         }
     }
 
@@ -49,11 +63,16 @@ class VehicleDataManager(context: Context) {
         }
         registered = true
         Log.i(TAG, "Vehicle data receiver started")
+        discoverAndRegisterNwdActions()
     }
 
     fun stop() {
         if (!registered) return
         runCatching { appContext.unregisterReceiver(receiver) }
+        if (nwdReceiverRegistered) {
+            runCatching { appContext.unregisterReceiver(nwdReceiver) }
+            nwdReceiverRegistered = false
+        }
         registered = false
     }
 
@@ -62,23 +81,31 @@ class VehicleDataManager(context: Context) {
         update(doors = decodeDoorByte(raw), source = "Choiceway CAN")
     }
 
-    private fun readCommonPayload(intent: Intent) {
+    private fun readCommonPayload(intent: Intent, source: String? = null) {
         val extras = intent.extras ?: return
-        val normalized = extras.keySet().associateBy(::normalizeKey)
+        val flattened = flattenExtras(extras)
+        val normalized = flattened.keys.associateBy(::normalizeKey)
 
-        val fuel = findNumber(intent, normalized, FUEL_PERCENT_KEYS)
+        val fuel = findNumber(flattened, normalized, FUEL_PERCENT_KEYS)
             ?.toFloat()?.takeIf { it in 0f..100f }
-        val range = findNumber(intent, normalized, RANGE_KM_KEYS)
+        val range = findNumber(flattened, normalized, RANGE_KM_KEYS)
             ?.toFloat()?.takeIf { it in 0f..3_000f }
+        val doors = readDoorState(flattened, normalized)
 
-        if (fuel != null || range != null) {
-            update(fuelPercent = fuel, rangeKm = range, source = intent.action ?: "Vehicle broadcast")
+        if (fuel != null || range != null || doors != null) {
+            update(
+                fuelPercent = fuel,
+                rangeKm = range,
+                doors = doors,
+                source = source ?: intent.action ?: "Vehicle broadcast"
+            )
+            Log.d(TAG, "Vehicle update from ${intent.action}: fuel=$fuel range=$range doors=$doors")
+        } else if (intent.action?.contains("nwd", ignoreCase = true) == true) {
+            Log.d(TAG, "Unmapped NWD payload ${intent.action}: ${describeExtras(flattened)}")
         }
 
-        for (key in extras.keySet()) {
-            @Suppress("DEPRECATION")
-            val bytes = runCatching { extras.get(key) as? ByteArray }.getOrNull() ?: continue
-            decodeRaiseFrames(bytes)
+        for ((key, value) in flattened) {
+            valueAsBytePayload(key, value)?.let(::decodeRaiseFrames)
         }
     }
 
@@ -105,20 +132,61 @@ class VehicleDataManager(context: Context) {
             when (command) {
                 RAISE_DOORS_COMMAND -> if (length >= 1) {
                     update(
-                        doors = decodeDoorByte(bytes[index + 3].toInt() and 0xFF),
-                        source = "RAISE CAN"
+                        doors = decodeRaiseDoors(bytes, index + 3, length),
+                        source = "RAISE CAN via NWD"
                     )
                 }
                 RAISE_TRIP_COMMAND -> if (length >= 7) {
-                    val rangeKm = ((bytes[index + 7].toInt() and 0xFF) shl 8) or
+                    val rawRange = ((bytes[index + 7].toInt() and 0xFF) shl 8) or
                         (bytes[index + 8].toInt() and 0xFF)
-                    if (rangeKm in 0..3_000) {
-                        update(rangeKm = rangeKm.toFloat(), source = "RAISE CAN")
+                    val unit = bytes[index + 9].toInt() and 0xFF
+                    val rangeKm = if (unit == RAISE_DISTANCE_MILES) {
+                        rawRange * MILES_TO_KM
+                    } else {
+                        rawRange.toFloat()
+                    }
+                    if (rangeKm in 0f..3_000f) {
+                        update(rangeKm = rangeKm, source = "RAISE CAN via NWD")
                     }
                 }
             }
             index = end + 1
         }
+    }
+
+    private fun decodeRaiseDoors(bytes: ByteArray, payloadIndex: Int, length: Int): VehicleDoorState {
+        val doors = bytes[payloadIndex].toInt() and 0xFF
+        val body = if (length >= 2) bytes[payloadIndex + 1].toInt() and 0xFF else 0
+        return VehicleDoorState(
+            // Raise boxes differ on whether left/right are mirrored for RHD vehicles. The
+            // dashboard currently displays aggregate status, for which the distinction is moot.
+            frontLeftOpen = doors and 0x80 != 0,
+            frontRightOpen = doors and 0x40 != 0,
+            rearRightOpen = doors and 0x20 != 0,
+            rearLeftOpen = doors and 0x10 != 0,
+            trunkOpen = doors and 0x08 != 0,
+            hoodOpen = body and 0x80 != 0
+        )
+    }
+
+    private fun valueAsBytePayload(key: String, value: Any?): ByteArray? = when (value) {
+        is ByteArray -> value
+        is IntArray -> value.map(Int::toByte).toByteArray()
+        is ShortArray -> value.map(Short::toByte).toByteArray()
+        is Array<*> -> value.mapNotNull { (it as? Number)?.toByte() }
+            .takeIf { it.size == value.size }?.toByteArray()
+        is List<*> -> value.mapNotNull { (it as? Number)?.toByte() }
+            .takeIf { it.size == value.size }?.toByteArray()
+        is String -> parseHexPayload(key, value)
+        else -> null
+    }
+
+    private fun parseHexPayload(key: String, value: String): ByteArray? {
+        val normalizedKey = normalizeKey(key)
+        if (RAW_PAYLOAD_KEY_TERMS.none(normalizedKey::contains)) return null
+        val tokens = HEX_BYTE_PATTERN.findAll(value).map(MatchResult::value).toList()
+        if (tokens.size < 4) return null
+        return tokens.map { it.removePrefix("0x").removePrefix("0X").toInt(16).toByte() }.toByteArray()
     }
 
     private fun decodeDoorByte(raw: Int) = VehicleDoorState(
@@ -146,9 +214,218 @@ class VehicleDataManager(context: Context) {
         )
     }
 
-    private fun findNumber(intent: Intent, keys: Map<String, String>, candidates: Set<String>): Number? {
+    private fun findNumber(
+        values: Map<String, Any?>,
+        keys: Map<String, String>,
+        candidates: Set<String>
+    ): Number? {
         val actual = candidates.firstNotNullOfOrNull(keys::get) ?: return null
-        return numberExtra(intent, actual)
+        return valueAsNumber(values[actual])
+    }
+
+    private fun readDoorState(
+        values: Map<String, Any?>,
+        keys: Map<String, String>
+    ): VehicleDoorState? {
+        findNumber(values, keys, DOOR_MASK_KEYS)?.let { return decodeGenericDoorMask(it.toInt()) }
+
+        fun flag(candidates: Set<String>): Boolean? {
+            val actual = candidates.firstNotNullOfOrNull(keys::get) ?: return null
+            return valueAsBoolean(values[actual])
+        }
+
+        val frontLeft = flag(FRONT_LEFT_DOOR_KEYS)
+        val frontRight = flag(FRONT_RIGHT_DOOR_KEYS)
+        val rearLeft = flag(REAR_LEFT_DOOR_KEYS)
+        val rearRight = flag(REAR_RIGHT_DOOR_KEYS)
+        val trunk = flag(TRUNK_KEYS)
+        val hood = flag(HOOD_KEYS)
+        if (listOf(frontLeft, frontRight, rearLeft, rearRight, trunk, hood).all { it == null }) {
+            return null
+        }
+        return VehicleDoorState(
+            frontLeftOpen = frontLeft == true,
+            frontRightOpen = frontRight == true,
+            rearLeftOpen = rearLeft == true,
+            rearRightOpen = rearRight == true,
+            trunkOpen = trunk == true,
+            hoodOpen = hood == true
+        )
+    }
+
+    private fun flattenExtras(bundle: Bundle, prefix: String = ""): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>()
+        for (key in bundle.keySet()) {
+            @Suppress("DEPRECATION")
+            val value = runCatching { bundle.get(key) }.getOrNull()
+            val fullKey = if (prefix.isEmpty()) key else "$prefix.$key"
+            if (value is Bundle) result.putAll(flattenExtras(value, fullKey))
+            else result[fullKey] = value
+        }
+        return result
+    }
+
+    private fun valueAsNumber(value: Any?): Number? = when (value) {
+        is Number -> value
+        is String -> NUMBER_PATTERN.find(value.trim())?.value?.toFloatOrNull()
+        is CharSequence -> NUMBER_PATTERN.find(value.toString().trim())?.value?.toFloatOrNull()
+        else -> null
+    }
+
+    private fun valueAsBoolean(value: Any?): Boolean? = when (value) {
+        is Boolean -> value
+        is Number -> value.toInt() != 0
+        is String -> when (value.trim().lowercase()) {
+            "1", "true", "yes", "on", "open", "opened" -> true
+            "0", "false", "no", "off", "close", "closed" -> false
+            else -> null
+        }
+        else -> null
+    }
+
+    private fun describeExtras(values: Map<String, Any?>): String = values.entries.joinToString {
+        val value = it.value
+        "${it.key}=${value?.javaClass?.simpleName ?: "null"}"
+    }
+
+    private fun decodeGenericDoorMask(raw: Int): VehicleDoorState {
+        val decoded = decodeDoorByte(raw)
+        // Some NWD CAN plug-ins use low-order bits instead of the Choiceway high-order layout.
+        // The dashboard currently needs open/closed aggregate status, so preserve that signal
+        // even when this firmware's per-door bit assignment is not known yet.
+        return if (raw != 0 && !decoded.anyOpen) decoded.copy(frontLeftOpen = true) else decoded
+    }
+
+    /**
+     * NWD/Nowada does not publish a stable CAN API. Its system CAN app does, however, keep the
+     * action names as strings in its APK. Discovering those constants makes this work across
+     * K2001/K2401/K2501 firmware revisions without hard-coding one vendor build's private API.
+     */
+    private fun discoverAndRegisterNwdActions() {
+        if (nwdDiscoveryStarted) return
+        nwdDiscoveryStarted = true
+        Thread({
+            val actions = linkedSetOf<String>()
+            actions += NWD_KNOWN_ACTIONS
+            runCatching {
+                @Suppress("DEPRECATION")
+                val packages = appContext.packageManager.getInstalledPackages(0)
+                val nwdG5 = isNwdG5Device()
+                packages.asSequence()
+                    .mapNotNull { info ->
+                        val name = info.packageName.lowercase()
+                        val label = runCatching {
+                            info.applicationInfo?.loadLabel(appContext.packageManager)
+                                ?.toString()?.lowercase().orEmpty()
+                        }.getOrDefault("")
+                        val score = when {
+                            name.startsWith("com.nwd") -> 100
+                            name.contains("canallinone") || label.contains("canallinone") -> 90
+                            name.contains("mycar") || label == "my car" -> 80
+                            nwdG5 && (name.contains("canbus") || label.contains("canbus")) -> 70
+                            nwdG5 && (name.contains("mcu") || label.contains("mcu")) -> 60
+                            nwdG5 && (name.contains("car") || label.contains("car")) -> 40
+                            else -> 0
+                        }
+                        info.applicationInfo?.sourceDir?.takeIf { score > 0 }?.let { score to it }
+                    }
+                    .sortedByDescending { it.first }
+                    .map { it.second }
+                    .distinct()
+                    .take(MAX_NWD_PACKAGES)
+                    .takeWhile { actions.size < MAX_DISCOVERED_ACTIONS }
+                    .forEach { actions += scanNwdActionStrings(File(it)) }
+            }.onFailure { Log.w(TAG, "Unable to inspect NWD packages", it) }
+
+            if (actions.isEmpty()) return@Thread
+            val registeredActions = actions.take(MAX_DISCOVERED_ACTIONS)
+            Handler(Looper.getMainLooper()).post {
+                if (!registered || nwdReceiverRegistered) return@post
+                val filter = IntentFilter().apply { registeredActions.forEach(::addAction) }
+                runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        appContext.registerReceiver(nwdReceiver, filter, Context.RECEIVER_EXPORTED)
+                    } else {
+                        @Suppress("UnspecifiedRegisterReceiverFlag")
+                        appContext.registerReceiver(nwdReceiver, filter)
+                    }
+                    nwdReceiverRegistered = true
+                    Log.i(TAG, "NWD CAN receiver started with ${registeredActions.size} actions")
+                }.onFailure { Log.w(TAG, "Unable to register NWD CAN receiver", it) }
+            }
+        }, "NwdCanDiscovery").apply { isDaemon = true }.start()
+    }
+
+    private fun isNwdG5Device(): Boolean {
+        val identity = listOf(
+            Build.MANUFACTURER,
+            Build.BRAND,
+            Build.MODEL,
+            Build.DEVICE,
+            Build.PRODUCT,
+            Build.DISPLAY
+        ).joinToString(" ").lowercase()
+        return identity.contains("nowada") || identity.contains("nwd_g5") ||
+            identity.contains("nwd g5") || identity.contains("k2401")
+    }
+
+    private fun scanNwdActionStrings(apk: File): Set<String> {
+        if (!apk.isFile) return emptySet()
+        return ZipFile(apk).use { zip ->
+            zip.entries().asSequence()
+                .filter { it.name.matches(DEX_NAME_PATTERN) }
+                .flatMap { entry ->
+                    zip.getInputStream(entry).buffered().use { input ->
+                        readVehicleActionStrings(input)
+                    }.asSequence()
+                }
+                .take(MAX_DISCOVERED_ACTIONS)
+                .toSet()
+        }
+    }
+
+    private fun readVehicleActionStrings(input: java.io.InputStream): Set<String> {
+        val result = linkedSetOf<String>()
+        val current = StringBuilder()
+        var overflow = false
+        while (true) {
+            val byte = input.read()
+            if (byte < 0) break
+            val char = byte.toChar()
+            if (char.isAsciiActionCharacter()) {
+                if (!overflow) {
+                    if (current.length < MAX_ACTION_LENGTH) current.append(char)
+                    else {
+                        current.setLength(0)
+                        overflow = true
+                    }
+                }
+            } else {
+                if (!overflow && current.length >= MIN_ACTION_LENGTH) {
+                    current.toString().takeIf(::isProbableVehicleAction)?.let(result::add)
+                    if (result.size >= MAX_DISCOVERED_ACTIONS) break
+                }
+                current.setLength(0)
+                overflow = false
+            }
+        }
+        if (!overflow && current.length >= MIN_ACTION_LENGTH && result.size < MAX_DISCOVERED_ACTIONS) {
+            current.toString().takeIf(::isProbableVehicleAction)?.let(result::add)
+        }
+        return result
+    }
+
+    private fun Char.isAsciiActionCharacter(): Boolean =
+        isLetterOrDigit() || this == '_' || this == '.' || this == '$' || this == ':' || this == '-'
+
+    private fun isProbableVehicleAction(value: String): Boolean {
+        if (value.length !in MIN_ACTION_LENGTH..MAX_ACTION_LENGTH ||
+            !value.first().isLetter() || '.' !in value || '/' in value || '$' in value
+        ) return false
+        val lower = value.lowercase()
+        val vehicle = lower.contains(".can") || lower.contains("_can") ||
+            lower.contains("can_") || VEHICLE_ACTION_TERMS.any(lower::contains)
+        return vehicle && !value.endsWith(".java", ignoreCase = true)
     }
 
     private fun numberExtra(intent: Intent, key: String): Number? {
@@ -178,14 +455,58 @@ class VehicleDataManager(context: Context) {
         )
 
         private val FUEL_PERCENT_KEYS = setOf(
-            "fuelpercent", "fuellevelpercent", "remainingfuelpercent", "tankpercent"
+            "fuelpercent", "fuellevelpercent", "remainingfuelpercent", "tankpercent",
+            "fuellevel", "fuelrate", "oilpercent", "oillevelpercent", "carrateoil"
         )
         private val RANGE_KM_KEYS = setOf(
-            "rangekm", "remainingrangekm", "distancetoemptykm", "cruisingrangekm"
+            "rangekm", "remainingrangekm", "distancetoemptykm", "cruisingrangekm",
+            "range", "remainingrange", "distancetoempty", "cruisingrange", "endurance",
+            "endurancemileage", "remainmileage", "surplusmileage"
         )
+        private val DOOR_MASK_KEYS = setOf(
+            "doormask", "doorstate", "doorstatus", "cardoor", "cardoordata", "doors"
+        )
+        private val FRONT_LEFT_DOOR_KEYS = setOf(
+            "frontleftdoor", "leftfrontdoor", "frontleftdooropen", "lfdoor", "flDoor"
+        ).map(::normalizeStatic).toSet()
+        private val FRONT_RIGHT_DOOR_KEYS = setOf(
+            "frontrightdoor", "rightfrontdoor", "frontrightdooropen", "rfdoor", "frDoor"
+        ).map(::normalizeStatic).toSet()
+        private val REAR_LEFT_DOOR_KEYS = setOf(
+            "rearleftdoor", "leftreardoor", "rearleftdooropen", "lrdoor", "rldoor"
+        )
+        private val REAR_RIGHT_DOOR_KEYS = setOf(
+            "rearrightdoor", "rightreardoor", "rearrightdooropen", "rrdoor"
+        )
+        private val TRUNK_KEYS = setOf("trunk", "trunkopen", "tailgate", "tailgateopen", "bootopen")
+        private val HOOD_KEYS = setOf("hood", "hoodopen", "bonnet", "bonnetopen")
+
+        private val NWD_KNOWN_ACTIONS = setOf(
+            "com.nwd.action.CAN_DATA",
+            "com.nwd.action.CAN_DATA_CHANGED",
+            "com.nwd.action.ACTION_CAN_DATA",
+            "com.nwd.action.ACTION_CAN_DATA_CHANGED",
+            "com.nwd.action.CAR_INFO",
+            "com.nwd.canbus.CAN_DATA",
+            "com.nwd.canbus.CAN_INFO",
+            "com.nwd.carinfo"
+        )
+        private val VEHICLE_ACTION_TERMS = setOf("carinfo", "vehicle", "door", "fuel", "range", "mcu")
+        private val DEX_NAME_PATTERN = Regex("classes(\\d*)?\\.dex")
+        private val NUMBER_PATTERN = Regex("[-+]?\\d+(?:\\.\\d+)?")
+        private val HEX_BYTE_PATTERN = Regex("(?i)(?:0x)?[0-9a-f]{2}")
+        private val RAW_PAYLOAD_KEY_TERMS = setOf("data", "can", "mcu", "raw", "frame", "packet")
+        private const val MAX_DISCOVERED_ACTIONS = 200
+        private const val MAX_NWD_PACKAGES = 12
+        private const val MIN_ACTION_LENGTH = 8
+        private const val MAX_ACTION_LENGTH = 180
+
+        private fun normalizeStatic(key: String): String = key.lowercase().filter(Char::isLetterOrDigit)
 
         private const val RAISE_HEADER = 0x2E
         private const val RAISE_TRIP_COMMAND = 0x21
         private const val RAISE_DOORS_COMMAND = 0x24
+        private const val RAISE_DISTANCE_MILES = 0x01
+        private const val MILES_TO_KM = 1.609344f
     }
 }
