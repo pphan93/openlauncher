@@ -45,6 +45,7 @@ import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.data.GradientDirection
+import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.data.UnitSystem
 import com.openlauncher.app.ui.theme.LocalDayMode
 import com.openlauncher.app.util.SunriseSunset
@@ -93,6 +94,7 @@ fun SettingsScreen(
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
     var showDayFontColorPicker by remember { mutableStateOf(false) }
+    var showPlateTextColorPicker by remember { mutableStateOf(false) }
     var pendingBluetoothPhotoDevice by remember { mutableStateOf<BluetoothDriverDevice?>(null) }
     var pendingProfileCrop by remember { mutableStateOf<PendingProfileCrop?>(null) }
     var bluetoothPermissionGranted by remember {
@@ -631,6 +633,44 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            SettingsDivider()
+
+            SettingsRow(
+                label = "Plate Style",
+                sublabel = settings.licensePlateRegion.displayName,
+                icon = Icons.Default.Map
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    LicensePlateRegion.entries.forEach { region ->
+                        FilterChip(
+                            selected = settings.licensePlateRegion == region,
+                            onClick = { onUpdate { copy(licensePlateRegion = region) } },
+                            label = { Text(region.displayName, fontSize = 9.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent,
+                                selectedLabelColor = Color.Black
+                            )
+                        )
+                    }
+                }
+            }
+
+            SettingsDivider()
+
+            SettingsRow(
+                label = "Plate Number Color",
+                sublabel = "Color of the registration number",
+                icon = Icons.Default.FormatColorText
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(settings.licensePlateTextColor))
+                        .clickable { showPlateTextColorPicker = true }
+                )
             }
 
             SettingsDivider()
@@ -1382,6 +1422,15 @@ fun SettingsScreen(
             initialColor = Color(settings.dayFontColor),
             onColorSelected = { color -> onUpdate { copy(dayFontColor = color.toArgb()) } },
             onDismiss = { showDayFontColorPicker = false }
+        )
+    }
+
+    if (showPlateTextColorPicker) {
+        ColorPickerDialog(
+            title = "Plate Number Color",
+            initialColor = Color(settings.licensePlateTextColor),
+            onColorSelected = { color -> onUpdate { copy(licensePlateTextColor = color.toArgb()) } },
+            onDismiss = { showPlateTextColorPicker = false }
         )
     }
 }

@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -56,6 +57,7 @@ import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.data.DriverProfilePhoto
+import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.ui.theme.Poppins
 import com.openlauncher.app.util.LocationData
 import kotlinx.coroutines.delay
@@ -175,6 +177,8 @@ fun AutomotiveDashboardScreen(
 
             VehicleStatusCard(
                 licensePlate = settings.licensePlate,
+                licensePlateRegion = settings.licensePlateRegion,
+                licensePlateTextColor = Color(settings.licensePlateTextColor),
                 location = location,
                 bearing = bearing,
                 vehicleData = vehicleData,
@@ -824,6 +828,8 @@ private fun calendarEventTimeLabel(startsAt: Long): String {
 @Composable
 private fun VehicleStatusCard(
     licensePlate: String,
+    licensePlateRegion: LicensePlateRegion,
+    licensePlateTextColor: Color,
     location: LocationData?,
     bearing: Float,
     vehicleData: VehicleData,
@@ -858,6 +864,13 @@ private fun VehicleStatusCard(
     val doorAccent = if (isDayMode) Color(0xFF1976A8) else Color(0xFF7ACBFA)
     val compassAccent = if (isDayMode) Color(0xFF7048CF) else Color(0xFFAD80FF)
     val fuelSideAccent = if (isDayMode) Color(0xFF16865F) else Color(0xFF55D893)
+    val licensePlateDrawable = when (licensePlateRegion) {
+        LicensePlateRegion.ALBERTA -> R.drawable.license_plate_alberta
+        LicensePlateRegion.ONTARIO -> R.drawable.license_plate_ontario
+        LicensePlateRegion.BRITISH_COLUMBIA -> R.drawable.license_plate_british_columbia
+        LicensePlateRegion.JAPAN_GLOW -> R.drawable.license_plate_japan_glow
+    }
+    val isJapanGlowPlate = licensePlateRegion == LicensePlateRegion.JAPAN_GLOW
 
     Column(
         modifier = modifier.clip(DashboardRadius).background(vehicleBackground),
@@ -952,16 +965,31 @@ private fun VehicleStatusCard(
                 )
                 Box(
                     modifier = Modifier.align(Alignment.Center).offset(y = (-4).dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFFF1F2F3))
-                        .padding(horizontal = 9.dp, vertical = 3.dp)
+                        .width(60.dp).height(28.dp),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Image(
+                        painter = painterResource(licensePlateDrawable),
+                        contentDescription = "${licensePlateRegion.displayName} license plate",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.matchParentSize()
+                    )
                     Text(
                         licensePlate.ifBlank { "ADD PLATE" },
-                        color = Color(0xFF101216),
-                        fontSize = 8.sp,
+                        color = licensePlateTextColor,
+                        fontSize = if (isJapanGlowPlate) 10.sp else 8.5.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.7.sp,
+                        letterSpacing = 0.45.sp,
+                        style = LocalTextStyle.current.copy(
+                            shadow = if (isJapanGlowPlate) {
+                                Shadow(
+                                    color = Color(0xFF42FFB8),
+                                    offset = Offset.Zero,
+                                    blurRadius = 8f
+                                )
+                            } else null
+                        ),
+                        modifier = Modifier.offset(y = if (isJapanGlowPlate) 5.dp else (-1).dp),
                         maxLines = 1
                     )
                 }

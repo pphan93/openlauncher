@@ -7,6 +7,12 @@ enum class UnitSystem { METRIC, IMPERIAL }
 enum class AppFont { POPPINS, SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
 enum class DayNightMode { DARK, LIGHT, AUTO, SYSTEM }
 enum class SidebarPosition { LEFT, RIGHT, BOTTOM }
+enum class LicensePlateRegion(val displayName: String) {
+    ALBERTA("Alberta"),
+    ONTARIO("Ontario"),
+    BRITISH_COLUMBIA("BC"),
+    JAPAN_GLOW("Japan Glow")
+}
 enum class GradientDirection { TOP_TO_BOTTOM, LEFT_TO_RIGHT, DIAGONAL, RADIAL }
 enum class ShortcutIconCategory(val displayName: String) {
     VEHICLE("Vehicle"),
@@ -140,6 +146,8 @@ data class DriverProfilePhoto(
 data class AppSettings(
     val vehicleName: String = "MY CAR",
     val licensePlate: String = "",
+    val licensePlateRegion: LicensePlateRegion = LicensePlateRegion.ALBERTA,
+    val licensePlateTextColor: Int = Color(0xFF101216).toArgb(),
     val profileName: String = "Driver",
     val profileImageUri: String = "",
     val profileImageFocusX: Float = 0f,

@@ -20,6 +20,8 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
         val LICENSE_PLATE      = stringPreferencesKey("license_plate")
+        val LICENSE_PLATE_REGION = stringPreferencesKey("license_plate_region")
+        val LICENSE_PLATE_TEXT_COLOR = intPreferencesKey("license_plate_text_color")
         val PROFILE_NAME       = stringPreferencesKey("profile_name")
         val PROFILE_IMAGE_URI  = stringPreferencesKey("profile_image_uri")
         val PROFILE_IMAGE_FOCUS_X = floatPreferencesKey("profile_image_focus_x")
@@ -80,6 +82,11 @@ class SettingsRepository(private val context: Context) {
             return AppSettings(
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
                 licensePlate   = prefs[Keys.LICENSE_PLATE]     ?: defaults.licensePlate,
+                licensePlateRegion = prefs[Keys.LICENSE_PLATE_REGION]?.let {
+                    runCatching { LicensePlateRegion.valueOf(it) }.getOrNull()
+                } ?: defaults.licensePlateRegion,
+                licensePlateTextColor = prefs[Keys.LICENSE_PLATE_TEXT_COLOR]
+                    ?: defaults.licensePlateTextColor,
                 profileName    = prefs[Keys.PROFILE_NAME]     ?: defaults.profileName,
                 profileImageUri = prefs[Keys.PROFILE_IMAGE_URI] ?: defaults.profileImageUri,
                 profileImageFocusX = (prefs[Keys.PROFILE_IMAGE_FOCUS_X]
@@ -154,6 +161,8 @@ class SettingsRepository(private val context: Context) {
     private fun writeSettings(prefs: MutablePreferences, s: AppSettings) {
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
             prefs[Keys.LICENSE_PLATE]      = s.licensePlate
+            prefs[Keys.LICENSE_PLATE_REGION] = s.licensePlateRegion.name
+            prefs[Keys.LICENSE_PLATE_TEXT_COLOR] = s.licensePlateTextColor
             prefs[Keys.PROFILE_NAME]       = s.profileName
             prefs[Keys.PROFILE_IMAGE_URI]  = s.profileImageUri
             prefs[Keys.PROFILE_IMAGE_FOCUS_X] = s.profileImageFocusX.coerceIn(-1f, 1f)
