@@ -16,6 +16,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -692,6 +694,8 @@ private fun DashboardCalendarCard(
         )
     }
     var events by remember { mutableStateOf<List<DashboardCalendarEvent>>(emptyList()) }
+    val calendarPageCount = maxOf(1, (events.size + CALENDAR_EVENTS_PER_PAGE - 1) / CALENDAR_EVENTS_PER_PAGE)
+    val calendarPagerState = rememberPagerState(pageCount = { calendarPageCount })
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasPermission = granted }
@@ -734,16 +738,47 @@ private fun DashboardCalendarCard(
                 }
             }
             else -> {
-                CalendarEventSummary(events[0], primary, secondary, Modifier.weight(1f))
-                VerticalDivider(
-                    modifier = Modifier.fillMaxHeight().padding(horizontal = 18.dp),
-                    color = secondary.copy(alpha = 0.13f)
-                )
-                events.getOrNull(1)?.let {
-                    CalendarEventSummary(it, primary, secondary, Modifier.weight(1f))
-                } ?: Column(Modifier.weight(1f)) {
-                    Text("Nothing after that", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                    Text("Next 7 days", color = secondary, fontSize = 9.sp)
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    HorizontalPager(
+                        state = calendarPagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        val firstIndex = page * CALENDAR_EVENTS_PER_PAGE
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(end = if (calendarPageCount > 1) 32.dp else 0.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CalendarEventSummary(events[firstIndex], primary, secondary, Modifier.weight(1f))
+                            VerticalDivider(
+                                modifier = Modifier.fillMaxHeight().padding(horizontal = 18.dp),
+                                color = secondary.copy(alpha = 0.13f)
+                            )
+                            events.getOrNull(firstIndex + 1)?.let {
+                                CalendarEventSummary(it, primary, secondary, Modifier.weight(1f))
+                            } ?: Column(Modifier.weight(1f)) {
+                                Text("Nothing after that", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                Text("Next 7 days", color = secondary, fontSize = 9.sp)
+                            }
+                        }
+                    }
+                    if (calendarPageCount > 1) {
+                        Column(
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.SwipeLeft,
+                                contentDescription = "Swipe for more events",
+                                tint = secondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                "${calendarPagerState.currentPage + 1}/$calendarPageCount",
+                                color = secondary,
+                                fontSize = 7.sp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -797,7 +832,7 @@ private fun loadUpcomingCalendarEvents(context: Context): List<DashboardCalendar
             val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.TITLE)
             val beginIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.BEGIN)
             buildList {
-                while (cursor.moveToNext() && size < 2) {
+                while (cursor.moveToNext() && size < MAX_UPCOMING_CALENDAR_EVENTS) {
                     add(
                         DashboardCalendarEvent(
                             title = cursor.getString(titleIndex)?.ifBlank { "Calendar event" } ?: "Calendar event",
@@ -809,6 +844,9 @@ private fun loadUpcomingCalendarEvents(context: Context): List<DashboardCalendar
         } ?: emptyList()
     }.getOrDefault(emptyList())
 }
+
+private const val CALENDAR_EVENTS_PER_PAGE = 2
+private const val MAX_UPCOMING_CALENDAR_EVENTS = 20
 
 private fun calendarEventTimeLabel(startsAt: Long): String {
     val now = JavaCalendar.getInstance()
