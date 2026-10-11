@@ -1,118 +1,157 @@
 <div align="center">
-  <img width="256" height="256" alt="logoo" src="https://github.com/user-attachments/assets/4c5c4ddb-836d-4c59-8325-76b8c8d78bb3" />
-  <h1>Open Launcher</h1>
-  <p><strong>An open-source, offline-first Android launcher built specifically for aftermarket car head units.</strong></p>
+  <img src="Screenshots/open-launcherbanner.jpg" alt="Open Launcher" width="720" />
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+  <p><strong>A landscape Android launcher designed for aftermarket car head units.</strong></p>
+
+  [![Latest release](https://img.shields.io/github/v/release/pphan93/openlauncher?label=release)](https://github.com/pphan93/openlauncher/releases/latest)
+  [![Android 5.0+](https://img.shields.io/badge/Android-5.0%2B-3DDC84?logo=android&logoColor=white)](#compatibility)
+  [![Build](https://github.com/pphan93/openlauncher/actions/workflows/release.yml/badge.svg)](https://github.com/pphan93/openlauncher/actions/workflows/release.yml)
 </div>
 
----
+Open Launcher provides a clean, touch-friendly dashboard for Android head units. It combines media controls, weather, calendar events, vehicle information, an app library, and customizable shortcuts in one interface that remains useful when the head unit is offline.
 
-## 📖 Table of Contents
-- [Why Build Another Car Launcher?](#-why-build-another-car-launcher)
-- [The Philosophy](#-the-philosophy-offline-first--oem-aesthetics)
-- [Current Features](#-current-features)
-- [Roadmap & Future Plans](#️-roadmap--future-plans)
-- [Contributing](#-contributing-open-source-first)
-- [License](#-license)
+> Open Launcher is under active development. Vehicle data and vendor-specific features depend on the head unit firmware and CAN-box integration.
 
----
+## Screenshots
 
-## 🛑 Why build another car launcher?
+### Home
 
-I built this project for three simple reasons:
+<img src="Screenshots/home.png" alt="Open Launcher home dashboard" width="100%" />
 
-1. **No Premium Paywalls:** I didn't want to pay someone for basic dashboard functionality.
-2. **Community-Driven:** I wanted it to be open-source. The car modding community is incredible, and I wanted to create a foundation that others could actually build upon, fork, and improve.
-3. **Clean Aesthetics:** Let's be honest—most Android launchers look like cheap video games, have zero functionality, or half the features are broken. This is built to look clean, professional, and integrated.
+### App Library
 
-## 🧠 The Philosophy: Offline-First & OEM+ Aesthetics
+<img src="Screenshots/applibrary.png" alt="Open Launcher app library" width="100%" />
 
-Most modern head unit setups rely on wireless CarPlay or Android Auto for navigation and media. That means the head unit itself is offline 90% of the time.
+### Settings
 
-I designed this launcher around that reality. It is built to be functional without a Wi-Fi connection while remaining highly customizable. Whether you are installing this in a 2020 Corolla Hybrid or a custom project car, the goal is for the UI to look like it actually belongs in your car's interior—a true OEM+ aesthetic.
+<img src="Screenshots/settings.png" alt="Open Launcher settings" width="100%" />
 
----
+## Features
 
-## ✨ Current Features
+### Automotive dashboard
 
-This project is currently in active development, but the core foundation is highly customizable:
+- Now Playing card with album art, transport controls, seeking, and MediaSession integration.
+- Current weather and multi-day forecast using GPS or a manually selected fallback location.
+- Photo carousel with user-selected dashboard images.
+- Upcoming calendar events with swipe navigation when more events are available.
+- GPS speed, compass heading, fuel range, fuel level, door status, and fuel-door side display.
+- Custom vehicle name, driver profile photo, and regional license-plate styles.
+- Metric and imperial units.
 
-<img width="2400" height="896" alt="Screenshot_20260527-025436" src="https://github.com/user-attachments/assets/a1bc63f3-2d4e-4ac0-bd56-b5d181681658" />
-<img width="2400" height="896" alt="Screenshot_20260527-212602" src="https://github.com/user-attachments/assets/cf319144-0a06-4bc6-ab83-855ef8514a9c" />
-<img width="2400" height="896" alt="Screenshot_20260527-025446" src="https://github.com/user-attachments/assets/cc038c53-dcf5-4b4b-bd73-bfcd18bd82d2" />
-<img width="2400" height="896" alt="Screenshot_20260527-025451" src="https://github.com/user-attachments/assets/cc038c53-dcf5-4b4b-bd73-bfcd18bd82d2" />
+### Apps and navigation
 
-### 🧩 Modular Widget Grid
-The home screen is a fully drag-and-drop, resize-capable grid. Every widget pane can be moved, scaled, and stacked however you want. Nothing is locked to a fixed position. Add and remove widgets from the built-in library at any time.
+- Searchable six-column app library with Essentials and All Apps views.
+- Includes launchable apps and vendor/system apps that many launchers hide.
+- Configurable navigation bar with custom app assignments and icons.
+- Bottom or left-side navigation placement with adjustable size.
+- Dedicated CarPlay, Android Auto, and radio app assignments. Open Launcher launches your existing receiver apps; it does not provide those services itself.
 
-### 🎛️ Instrument Panel Widgets
-A growing library of purpose-built car widgets designed to look like they belong on a dash — not a phone:
+### Personalization
 
-* **Smart Music Player** — pulls track metadata, album art, and playback controls from any local or streaming source. Detects when CarPlay or Android Auto is in use and switches into shortcut mode automatically.
-* **AM/FM Radio** — instrument panel-style digital display that mirrors your head unit's **real tuner**. On szchoiceway-based units it talks to the MCU directly (seek, FM1/FM2/FM3/AM band switching, direct-tune frequency presets with memory). On every other unit it mirrors and controls your vendor radio app through its media session — assign the app once from the widget and get live frequency/station readout plus seek controls. No simulated stations or fake static.
-* **Speedometer** — standalone GPS-based digital speed readout. Independent from the trip tracker so it can live anywhere on the grid.
-* **Altimeter** — live elevation tracking pulled from the device GPS.
-* **Trip Meter** — taxi-style rolling odometer display with trip distance and elapsed time. Includes a hidden **0–100 km/h timer** (tap the meter label to reveal it) that auto-starts from standstill and locks in your time at 100.
-* **Head Unit Vitals** — real-time CPU load, memory pressure, and temperature readouts for monitoring your head unit's thermals on long drives.
-* **Soundboard** — 6 fully assignable sound pads. Each pad can be set to a built-in synth type (HORN, BEEP, ALERT, KICK, SNARE, BASS, FART) or loaded with any custom audio file from device storage. Assignments persist across restarts.
-* **Dynamic Weather** — auto-detects connectivity. Shows live weather when online, hides cleanly when offline. No broken blank widgets.
-* **GPS Compass** — live bearing with calibrated heading display.
+- Dark, light, system, and automatic sunrise/sunset display modes.
+- Accent, dashboard accent, background, text, and license-plate text colors.
+- Solid, linear, diagonal, and radial backgrounds plus custom wallpaper and dimming.
+- Adjustable widget opacity, UI scale, text scale, and font weight.
+- Poppins, Inter, Manrope, Barlow, Oxanium, system, JetBrains Mono, and Source Code Pro fonts.
+- Optional vehicle name in the center of the status bar.
+- Bluetooth-linked driver photos for automatic profile switching.
 
-### 🗂️ App Library
-Pulls every installed app, including system-level apps that most launchers miss — such as buried CarPlay and Android Auto receiver apps on head units that don't surface them normally.
+### Updates
 
-### 📌 Sidebar Shortcuts
-The sidebar holds your most-used app shortcuts. Drag to reorder, long-press to remap, and position the entire bar on the Left, Right, or Bottom of the screen to suit your driving hand or interior layout.
+- Checks the public GitHub releases feed from the Settings screen.
+- Downloads the release APK and opens Android's package installer after user confirmation.
+- Tagged releases are built and signed automatically by GitHub Actions and include a SHA-256 checksum.
 
-### 🌗 Smart Day/Night Theme Engine
-Four distinct modes for head units that can't always pass the car's headlight signal to Android:
-* **Forced Dark / Forced Light** — static overrides.
-* **System Sync** — follows the head unit's native light/dark setting.
-* **Sunset Mode** — automatically switches at local sunrise/sunset using offline location calculations, no internet required.
+## Vehicle data and CAN bus
 
-### 🛰️ GPS with Offline Calibration
-Speed and distance calculations use a rewritten GPS math layer with improved filtering. A calibration offset option is available for devices whose GPS chips report inaccurate baselines — accessible from the trip meter settings for reliable offline use.
+Open Launcher only shows vehicle values received from the head unit; missing data remains clearly marked as unavailable instead of being replaced with simulated values.
 
-### 🎨 Deep Personalization
-Accent color, background color, gradient, wallpaper with adjustable dim, font weight, text scale, UI scale, and app font — all tunable from the settings menu, which is organized into logical sections (Appearance, Layout, Widgets, System).
+| Platform | Current support |
+| --- | --- |
+| NWD G5 / K2401 with RAISE CAN box | Experimental decoding for fuel level, remaining range, and door status from discovered NWD broadcasts and validated RAISE frames. |
+| Choiceway / RaviRS-based units | Supports known EventCenter door, trip, fuel, and raw-CAN broadcasts when exposed by the firmware. |
+| FYT / UIS7862 and other units | Standard launcher features should work, but these platforms are not the same as NWD. Vehicle data requires a compatible vendor broadcast format and is not guaranteed. |
 
-### 📱 Picture-in-Picture (PiP) Overlay ⚠️ *Beta*
-Launch any app as a floating freeform window layered over the launcher.
+CAN implementations vary by vehicle, CAN-box model, selected car profile, MCU, and firmware version. A working factory vehicle-information screen does not necessarily mean third-party apps can access the same data.
 
-> **This feature is currently in beta and requires the special `openlauncher-test-pip` build.** It relies on AOSP platform-level signing to access the window embedding APIs. The standard APK does not include PiP — use the `test-pip` release asset if you want to try it. Expect rough edges: not all apps behave correctly in a freeform window, and compatibility varies heavily by head unit ROM. This is a work in progress.
+## Compatibility
 
-### 🔔 First-Run Onboarding
-A clean onboarding flow on first launch explains key permissions (location, notification listener, draw-over-apps) before requesting them, with direct links to the relevant system settings screens.
+- Android 5.0 (API 21) or newer.
+- Landscape displays; the interface is optimized for wide head-unit screens.
+- GPS is recommended for speed, compass, automatic weather location, and sunrise/sunset mode.
+- Internet access is required for weather, location search, and update downloads. The launcher, app library, media controls, calendar, and settings otherwise operate locally.
 
----
+## Installation
 
-## 🗺️ Roadmap & Future Plans
+1. Download the APK and matching checksum from the [latest release](https://github.com/pphan93/openlauncher/releases/latest).
+2. If desired, verify the APK against the published `.sha256` file.
+3. Copy the APK to the head unit or download it directly there.
+4. Allow installation from the browser or file manager when Android asks.
+5. Install Open Launcher and select it as the default Home app.
+6. Open Settings inside the launcher and grant only the optional access needed for the features you use.
 
-The current priority is **stability and universal compatibility** — ensuring the launcher scales correctly across the wide range of aftermarket head unit resolutions and hardware specs.
+Upgrading over an existing installation preserves settings when the APK is signed with the same release key. If Android reports a signature conflict, uninstalling the existing build will remove its saved settings.
 
-Remaining targets:
+## Permissions
 
-- [ ] **Advanced Color Engine:** Per-element hex control for every surface in the UI — accent, text, borders, backgrounds — to precisely match a car's specific dashboard ambient lighting.
-- [ ] **Offline Weather via FM/RDS:** A highly experimental goal to pull local weather data directly from FM radio bands (RDS/TMC) using the car's physical antenna — bypassing Wi-Fi entirely.
-- [ ] **Universal Theming Engine:** A standardized platform for the community to build, share, and install full visual themes.
+| Access | Used for |
+| --- | --- |
+| Location | GPS speed, compass calibration support, weather location, and automatic day/night mode. |
+| Notification access | Reading and controlling the active media session for Now Playing. |
+| Calendar | Displaying upcoming events on the dashboard. |
+| Nearby devices / Bluetooth | Matching a connected phone to a driver profile photo. |
+| Photos and files | Selecting wallpapers, dashboard photos, and profile images. |
+| Modify system settings | Dashboard brightness control. |
+| Install unknown apps | Installing an APK downloaded through the in-app updater. |
 
----
+## Privacy and network use
 
-## 🤝 Contributing (Open Source First)
+- No account, analytics SDK, advertising SDK, or telemetry service is included.
+- Preferences and selected media are stored locally on the head unit.
+- Weather requests are sent to [Open-Meteo](https://open-meteo.com/).
+- Update checks and APK downloads connect to this repository's public GitHub releases.
+- Calendar, media-session, Bluetooth, and installed-app information is processed locally.
 
-This project is open-source because it takes a community to build something that works across hundreds of different head unit models. Whether you are a developer, a designer, or just someone testing it in your car, your help is welcome!
+## Building from source
 
-### How you can help:
-1. **Test on your hardware:** Install the APK on your specific head unit, break things, and submit Bug Reports in the [Issues tab](../../issues).
-2. **Feature Requests:** Have a cool idea? Open a discussion.
-3. **Pull Requests:** See a bug you can fix or a feature you want to add? Fork the repo and submit a PR. *(Please check the issues tab first to see what is currently being worked on!)*
+Requirements:
 
----
+- Android Studio or the Android SDK command-line tools.
+- JDK 17 or newer.
+- Android SDK matching the project's `compileSdk` configuration.
 
-## Donate
+On Linux or macOS:
 
-This app is fully free and open-source, a donation isn't required but would be greatly appreciated to help support the constant updates and fixes planned based on your suggestions!
+```bash
+./gradlew assembleDebug
+```
 
-[![Donate with PayPal](https://raw.githubusercontent.com/stefan-niedermann/paypal-donate-button/master/paypal-donate-button.png)](https://paypal.me/dw2lam)
+On Windows:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+The debug APK is generated at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Release signing is configured through the `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` environment variables. See [the release workflow](.github/workflows/release.yml) for the automated build process.
+
+## Contributing
+
+Testing across different head units, vehicles, MCU versions, and CAN boxes is especially valuable.
+
+- Report reproducible bugs through [GitHub Issues](https://github.com/pphan93/openlauncher/issues).
+- Include the head-unit model, Android version, MCU/firmware version, CAN-box brand, selected vehicle profile, and relevant logs for CAN-related reports.
+- Open a feature request before starting a large change.
+- Keep pull requests focused and describe how the change was tested.
+
+## Known limitations
+
+- CAN-bus access is vendor-specific; there is no universal Android API for aftermarket head units.
+- Some system apps may refuse to launch outside their original vendor launcher.
+- Weather and update checks require an internet connection.
+- Layouts are designed for landscape head units rather than phones or portrait displays.
