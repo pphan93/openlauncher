@@ -41,6 +41,8 @@ class SettingsRepository(private val context: Context) {
         val UI_SCALE           = floatPreferencesKey("ui_scale")
         val UNIT_SYSTEM        = stringPreferencesKey("unit_system")
         val APP_FONT           = stringPreferencesKey("app_font")
+        val ICON_PACK_PACKAGE  = stringPreferencesKey("icon_pack_package")
+        val NAVIGATION_ICONS_JSON = stringPreferencesKey("navigation_icons_json")
         val WIDGET_OPACITY = floatPreferencesKey("widget_opacity")
         val WEATHER_WIDGET_OPACITY_LEGACY = floatPreferencesKey("weather_widget_opacity")
         val MANUAL_WEATHER_LOCATION_NAME = stringPreferencesKey("manual_weather_location_name")
@@ -58,6 +60,9 @@ class SettingsRepository(private val context: Context) {
         val BOTTOM_BAR_SHORTCUTS_RIGHT = booleanPreferencesKey("bottom_bar_shortcuts_right")
         val DAY_NIGHT_MODE        = stringPreferencesKey("day_night_mode")
         val RADIO_PACKAGE         = stringPreferencesKey("radio_package")
+        val VALET_MODE_ENABLED    = booleanPreferencesKey("valet_mode_enabled")
+        val VALET_PIN_SALT        = stringPreferencesKey("valet_pin_salt")
+        val VALET_PIN_HASH        = stringPreferencesKey("valet_pin_hash")
         val ONBOARDING_COMPLETED  = booleanPreferencesKey("onboarding_completed")
         val COMPASS_OFFSET        = floatPreferencesKey("compass_offset")
         val GRADIENT_DIRECTION    = stringPreferencesKey("gradient_direction")
@@ -122,6 +127,10 @@ class SettingsRepository(private val context: Context) {
                 uiScale        = prefs[Keys.UI_SCALE]         ?: defaults.uiScale,
                 unitSystem     = prefs[Keys.UNIT_SYSTEM]?.let { runCatching { UnitSystem.valueOf(it) }.getOrNull() } ?: defaults.unitSystem,
                 appFont        = prefs[Keys.APP_FONT]?.let { runCatching { AppFont.valueOf(it) }.getOrNull() } ?: defaults.appFont,
+                iconPackPackage = prefs[Keys.ICON_PACK_PACKAGE] ?: defaults.iconPackPackage,
+                navigationIcons = prefs[Keys.NAVIGATION_ICONS_JSON]?.let {
+                    runCatching { gson.fromJson(it, NavigationIconSettings::class.java) }.getOrNull()
+                } ?: defaults.navigationIcons,
                 widgetOpacity = (
                     prefs[Keys.WIDGET_OPACITY]
                         ?: prefs[Keys.WEATHER_WIDGET_OPACITY_LEGACY]
@@ -142,6 +151,9 @@ class SettingsRepository(private val context: Context) {
                 bottomBarShortcutsRight = prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] ?: defaults.bottomBarShortcutsRight,
                 dayNightMode     = prefs[Keys.DAY_NIGHT_MODE]?.let { runCatching { DayNightMode.valueOf(it) }.getOrNull() } ?: defaults.dayNightMode,
                 radioPackage     = prefs[Keys.RADIO_PACKAGE]    ?: defaults.radioPackage,
+                valetModeEnabled = prefs[Keys.VALET_MODE_ENABLED] ?: defaults.valetModeEnabled,
+                valetPinSalt = prefs[Keys.VALET_PIN_SALT] ?: defaults.valetPinSalt,
+                valetPinHash = prefs[Keys.VALET_PIN_HASH] ?: defaults.valetPinHash,
                 onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
                 compassOffset    = prefs[Keys.COMPASS_OFFSET]    ?: defaults.compassOffset,
                 gradientDirection = prefs[Keys.GRADIENT_DIRECTION]?.let { runCatching { GradientDirection.valueOf(it) }.getOrNull() } ?: defaults.gradientDirection,
@@ -185,6 +197,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.UI_SCALE]           = s.uiScale
             prefs[Keys.UNIT_SYSTEM]        = s.unitSystem.name
             prefs[Keys.APP_FONT]           = s.appFont.name
+            prefs[Keys.ICON_PACK_PACKAGE]  = s.iconPackPackage
+            prefs[Keys.NAVIGATION_ICONS_JSON] = gson.toJson(s.navigationIcons)
             prefs[Keys.WIDGET_OPACITY] = s.widgetOpacity.coerceIn(0f, 1f)
             prefs.remove(Keys.WEATHER_WIDGET_OPACITY_LEGACY)
             prefs[Keys.MANUAL_WEATHER_LOCATION_NAME] = s.manualWeatherLocationName
@@ -203,6 +217,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] = s.bottomBarShortcutsRight
             prefs[Keys.DAY_NIGHT_MODE]     = s.dayNightMode.name
             prefs[Keys.RADIO_PACKAGE]      = s.radioPackage
+            prefs[Keys.VALET_MODE_ENABLED] = s.valetModeEnabled
+            prefs[Keys.VALET_PIN_SALT]     = s.valetPinSalt
+            prefs[Keys.VALET_PIN_HASH]     = s.valetPinHash
             prefs[Keys.ONBOARDING_COMPLETED] = s.onboardingCompleted
             prefs[Keys.COMPASS_OFFSET]     = s.compassOffset
             prefs[Keys.GRADIENT_DIRECTION] = s.gradientDirection.name

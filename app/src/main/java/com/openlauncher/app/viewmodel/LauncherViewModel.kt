@@ -33,6 +33,7 @@ import com.openlauncher.app.util.LocationCompassManager
 import com.openlauncher.app.util.LocationData
 import com.openlauncher.app.util.BluetoothDriverDevice
 import com.openlauncher.app.util.BluetoothDriverManager
+import com.openlauncher.app.util.IconPackManager
 import com.openlauncher.app.util.VehicleDataManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -222,11 +223,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _appsLoading = MutableStateFlow(false)
     val appsLoading: StateFlow<Boolean> = _appsLoading
 
-    fun loadInstalledApps() {
-        if (_appsLoading.value) return
-        viewModelScope.launch(Dispatchers.IO) {
+    private var appsLoadJob: Job? = null
+    private var appsLoadGeneration = 0
+
+    fun loadInstalledApps(iconPackPackage: String = settings.value.iconPackPackage) {
+        appsLoadJob?.cancel()
+        val generation = ++appsLoadGeneration
+        appsLoadJob = viewModelScope.launch(Dispatchers.IO) {
             _appsLoading.value = true
-            val pm = getApplication<Application>().packageManager
+            val application = getApplication<Application>()
+            val pm = application.packageManager
+            val iconPack = IconPackManager.resolver(application, iconPackPackage)
 
             // Use getInstalledApplications — same source Android Settings uses,
             // catches apps with no launcher/ACTION_MAIN activity (e.g. CarPlay companions)
@@ -235,19 +242,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     try {
                         val label = pm.getApplicationLabel(appInfo).toString()
                         if (label.isBlank()) return@mapNotNull null
+                        val launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName)
+                            ?: pm.getLeanbackLaunchIntentForPackage(appInfo.packageName)
                         AppInfo(
                             packageName = appInfo.packageName,
                             appName     = label,
-                            icon        = pm.getApplicationIcon(appInfo),
+                            icon        = iconPack?.iconFor(appInfo.packageName, launchIntent?.component)
+                                ?: pm.getApplicationIcon(appInfo),
                             isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0,
-                            isLaunchable = pm.getLaunchIntentForPackage(appInfo.packageName) != null ||
-                                pm.getLeanbackLaunchIntentForPackage(appInfo.packageName) != null
+                            isLaunchable = launchIntent != null
                         )
                     } catch (_: Exception) { null }
                 }
                 .distinctBy { it.packageName }
                 .sortedBy { it.appName }
-            _appsLoading.value = false
+            if (generation == appsLoadGeneration) _appsLoading.value = false
         }
     }
 
@@ -301,11 +310,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         weatherJob?.cancel()
         weatherJob = viewModelScope.launch {
             try {
+                _weatherError.value = null
                 // Always request celsius — the state stores celsius and the widget
                 // converts for display, so requesting fahrenheit just round-tripped
                 // the value through two lossy conversions
                 val resp = WeatherApi.service.getForecast(lat, lon, temperatureUnit = "celsius")
-                resp.currentWeather?.let { cw ->
+                val currentWeather = resp.currentWeather
+                    ?: error("Weather service returned no current conditions")
+                currentWeather.let { cw ->
                     val daily = resp.daily
                     val forecastCount = listOf(
                         daily?.dates?.size ?: 0,
@@ -644,7 +656,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     init {
-        loadInstalledApps()
+        viewModelScope.launch {
+            settings
+                .map { it.iconPackPackage }
+                .distinctUntilChanged()
+                .collect(::loadInstalledApps)
+        }
         refreshConnectivity()
         bluetoothDriverMgr.start()
         vehicleDataMgr.start()
@@ -669,7 +686,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     if (latitude != null && longitude != null) latitude to longitude else null
                 } ?: return@collect
                 val now = System.currentTimeMillis()
-                if (coordinates != lastCoordinates || now - lastFetchMs >= 30 * 60 * 1_000L) {
+                if (
+                    coordinates != lastCoordinates ||
+                    _weather.value == null ||
+                    now - lastFetchMs >= 30 * 60 * 1_000L
+                ) {
                     lastFetchMs = now
                     lastCoordinates = coordinates
                     fetchWeather(

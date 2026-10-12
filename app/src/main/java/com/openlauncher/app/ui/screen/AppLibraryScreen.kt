@@ -202,7 +202,7 @@ private fun AppTile(
             .clickable(onClick = onClick)
             .padding(7.dp)
     ) {
-        val bmp = remember(app.packageName) {
+        val bmp = remember(app.packageName, app.icon) {
             try { app.icon.toBitmap(80, 80) } catch (_: Exception) { null }
         }
         if (bmp != null) {

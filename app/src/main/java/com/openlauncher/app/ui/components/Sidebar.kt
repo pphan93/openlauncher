@@ -24,16 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,104 +41,20 @@ import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.DefaultShortcutIcon
+import com.openlauncher.app.data.IconPackIcon
 import com.openlauncher.app.data.ShortcutIconCategory
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.ui.theme.LocalDayMode
-import com.openlauncher.app.ui.theme.Poppins
+import com.openlauncher.app.util.IconPackManager
+import com.phosphor.icons.PhIcons
+import com.phosphor.icons.regular.*
 import kotlin.math.roundToInt
 
-private val ICON_SIZE   = 22.dp
+private val ICON_SIZE   = 20.dp
 private val SLOT_SIZE   = 52.dp
 private val HORIZONTAL_SLOT_SIZE = 88.dp
 private val VERTICAL_DASHBOARD_SLOT_SIZE = 70.dp
-
-/** A theme-tintable CarPlay-style mark: an open circular ring around Play. */
-private val CarPlayIcon: ImageVector = ImageVector.Builder(
-    name = "CarPlay",
-    defaultWidth = 24.dp,
-    defaultHeight = 24.dp,
-    viewportWidth = 24f,
-    viewportHeight = 24f
-).apply {
-    path(
-        fill = null,
-        stroke = SolidColor(Color.Black),
-        strokeLineWidth = 2.6f,
-        strokeLineCap = StrokeCap.Round
-    ) {
-        moveTo(19.2f, 6.7f)
-        curveTo(17.45f, 3.75f, 14.25f, 2.15f, 10.85f, 2.25f)
-        curveTo(5.55f, 2.4f, 1.4f, 6.75f, 1.55f, 12.05f)
-        curveTo(1.7f, 17.45f, 6.15f, 21.7f, 11.55f, 21.55f)
-        curveTo(14.9f, 21.45f, 18.0f, 19.7f, 19.65f, 16.85f)
-    }
-    path(fill = SolidColor(Color.Black)) {
-        moveTo(8.7f, 7.45f)
-        curveTo(8.7f, 6.85f, 9.35f, 6.5f, 9.85f, 6.82f)
-        lineTo(16.3f, 10.92f)
-        curveTo(16.95f, 11.33f, 16.95f, 12.27f, 16.3f, 12.68f)
-        lineTo(9.85f, 16.78f)
-        curveTo(9.35f, 17.1f, 8.7f, 16.75f, 8.7f, 16.15f)
-        close()
-    }
-}.build()
-
-/** Four outlined tiles matching the app-grid symbol in the automotive reference. */
-private val AppsOutlineIcon: ImageVector = ImageVector.Builder(
-    name = "AppsOutline",
-    defaultWidth = 24.dp,
-    defaultHeight = 24.dp,
-    viewportWidth = 24f,
-    viewportHeight = 24f
-).apply {
-    listOf(4f to 4f, 14f to 4f, 4f to 14f, 14f to 14f).forEach { (x, y) ->
-        path(
-            fill = null,
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.8f,
-            strokeLineCap = StrokeCap.Round
-        ) {
-            moveTo(x + 1f, y)
-            lineTo(x + 5f, y)
-            curveTo(x + 5.55f, y, x + 6f, y + 0.45f, x + 6f, y + 1f)
-            lineTo(x + 6f, y + 5f)
-            curveTo(x + 6f, y + 5.55f, x + 5.55f, y + 6f, x + 5f, y + 6f)
-            lineTo(x + 1f, y + 6f)
-            curveTo(x + 0.45f, y + 6f, x, y + 5.55f, x, y + 5f)
-            lineTo(x, y + 1f)
-            curveTo(x, y + 0.45f, x + 0.45f, y, x + 1f, y)
-            close()
-        }
-    }
-}.build()
-
-/** Minimal lane-marking icon matching the Direction symbol in the reference. */
-private val DirectionOutlineIcon: ImageVector = ImageVector.Builder(
-    name = "DirectionOutline",
-    defaultWidth = 24.dp,
-    defaultHeight = 24.dp,
-    viewportWidth = 24f,
-    viewportHeight = 24f
-).apply {
-    path(
-        fill = null,
-        stroke = SolidColor(Color.Black),
-        strokeLineWidth = 1.8f,
-        strokeLineCap = StrokeCap.Round
-    ) {
-        moveTo(6.5f, 3f)
-        lineTo(5f, 21f)
-        moveTo(17.5f, 3f)
-        lineTo(19f, 21f)
-        moveTo(12f, 3f)
-        lineTo(12f, 7f)
-        moveTo(12f, 10f)
-        lineTo(12f, 14f)
-        moveTo(12f, 17f)
-        lineTo(12f, 21f)
-    }
-}.build()
 
 @Composable
 fun Sidebar(
@@ -160,9 +74,12 @@ fun Sidebar(
 ) {
     val isDayMode    = LocalDayMode.current
     val accent       = Color(settings.dashboardAccentColor)
-    val sidebarBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF181919)
+    val screenBg     = if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A)
+    val sidebarBg    = (if (isDayMode) Color.White else Color(0xFF181919))
+        .copy(alpha = settings.widgetOpacity.coerceIn(0f, 1f))
     val iconInactive = if (isDayMode) Color(settings.dayFontColor).copy(alpha = 0.68f) else Color(settings.fontColor).copy(alpha = 0.72f)
     val dividerColor = if (isDayMode) Color(0xFFCCCCCC) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
+    val context      = LocalContext.current
     val density      = LocalDensity.current
     val slotSizePx   = with(density) {
         (if (isHorizontal) HORIZONTAL_SLOT_SIZE else VERTICAL_DASHBOARD_SLOT_SIZE).toPx()
@@ -177,6 +94,16 @@ fun Sidebar(
 
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var dragOffsetPx  by remember { mutableFloatStateOf(0f) }
+
+    val homeNavigationIcon = remember(settings.navigationIcons.home) {
+        loadNavigationIcon(context, settings.navigationIcons.home)
+    }
+    val appsNavigationIcon = remember(settings.navigationIcons.apps) {
+        loadNavigationIcon(context, settings.navigationIcons.apps)
+    }
+    val settingsNavigationIcon = remember(settings.navigationIcons.settings) {
+        loadNavigationIcon(context, settings.navigationIcons.settings)
+    }
 
     fun dragTargetIndex(): Int = if (draggingIndex < 0) -1 else
         (draggingIndex + (dragOffsetPx / slotSizePx).roundToInt())
@@ -233,46 +160,13 @@ fun Sidebar(
         }
     }
 
-    val navButtons: @Composable () -> Unit = {
-        NavButton(
-            icon         = AppsOutlineIcon,
-            label        = "Apps",
-            isActive     = currentDest == NavDestination.APP_LIBRARY,
-            accent       = accent,
-            iconInactive = iconInactive,
-            isHorizontal = isHorizontal,
-            dashboardStyle = true,
-            onClick      = { onNavigate(NavDestination.APP_LIBRARY) }
-        )
-        NavButton(
-            icon         = Icons.Outlined.Settings,
-            label        = "Settings",
-            isActive     = currentDest == NavDestination.SETTINGS,
-            accent       = accent,
-            iconInactive = iconInactive,
-            isHorizontal = isHorizontal,
-            dashboardStyle = true,
-            onClick      = { onNavigate(NavDestination.SETTINGS) }
-        )
-        NavButton(
-            icon         = Icons.Outlined.Home,
-            label        = "Home",
-            isActive     = currentDest == NavDestination.HOME,
-            accent       = accent,
-            iconInactive = iconInactive,
-            isHorizontal = isHorizontal,
-            dashboardStyle = true,
-            onClick      = { onNavigate(NavDestination.HOME) }
-        )
-    }
-
     if (isHorizontal) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .height(84.dp)
-                .background(if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A))
-                .padding(horizontal = 24.dp, vertical = 7.dp)
+                .background(screenBg)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -284,13 +178,13 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true, true) {
+                NavButton(PhIcons.Regular.House, "Home", currentDest == NavDestination.HOME, accent, iconInactive, true, true, homeNavigationIcon) {
                     onNavigate(NavDestination.HOME)
                 }
-                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true, true) {
+                NavButton(PhIcons.Regular.SquaresFour, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, true, true, appsNavigationIcon) {
                     onNavigate(NavDestination.APP_LIBRARY)
                 }
-                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true, true) {
+                NavButton(PhIcons.Regular.Gear, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, true, true, settingsNavigationIcon) {
                     onNavigate(NavDestination.SETTINGS)
                 }
                 shortcutsContent(settings.shortcuts.indices.toList())
@@ -302,7 +196,7 @@ fun Sidebar(
             modifier = modifier
                 .width(84.dp)
                 .fillMaxHeight()
-                .background(if (isDayMode) Color(0xFFF0F1ED) else Color(0xFF090A0A))
+                .background(screenBg)
                 .padding(horizontal = 7.dp, vertical = 8.dp)
         ) {
             Column(
@@ -314,13 +208,13 @@ fun Sidebar(
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                NavButton(Icons.Outlined.Home, "Home", currentDest == NavDestination.HOME, accent, iconInactive, false, true) {
+                NavButton(PhIcons.Regular.House, "Home", currentDest == NavDestination.HOME, accent, iconInactive, false, true, homeNavigationIcon) {
                     onNavigate(NavDestination.HOME)
                 }
-                NavButton(AppsOutlineIcon, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, false, true) {
+                NavButton(PhIcons.Regular.SquaresFour, "Apps", currentDest == NavDestination.APP_LIBRARY, accent, iconInactive, false, true, appsNavigationIcon) {
                     onNavigate(NavDestination.APP_LIBRARY)
                 }
-                NavButton(Icons.Outlined.Settings, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, false, true) {
+                NavButton(PhIcons.Regular.Gear, "Settings", currentDest == NavDestination.SETTINGS, accent, iconInactive, false, true, settingsNavigationIcon) {
                     onNavigate(NavDestination.SETTINGS)
                 }
                 shortcutsContent(settings.shortcuts.indices.toList())
@@ -462,7 +356,7 @@ private fun ShortcutSlot(
                     painter            = BitmapPainter(bmp.asImageBitmap()),
                     contentDescription = shortcut.label,
                     tint               = iconColor,
-                    modifier           = Modifier.size(26.dp)
+                    modifier           = Modifier.size(ICON_SIZE)
                 )
             }
             shortcut.isDefault -> {
@@ -488,7 +382,6 @@ private fun ShortcutSlot(
                     text = shortcut.label.ifEmpty { "Add" },
                     color = iconColor,
                     fontSize = 7.sp,
-                    fontFamily = Poppins,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -692,6 +585,7 @@ private fun NavButton(
     iconInactive: Color,
     isHorizontal: Boolean = false,
     dashboardStyle: Boolean = false,
+    customIcon: Drawable? = null,
     onClick: () -> Unit
 ) {
     val isDayMode = LocalDayMode.current
@@ -699,6 +593,9 @@ private fun NavButton(
         if (accent.luminance() > 0.42f) Color.Black else Color.White
     } else if (isDayMode) Color(0xFF111111) else Color.White
     val activeBg = if (dashboardStyle) accent else if (isDayMode) Color(0xFF000000).copy(alpha = 0.08f) else Color.White.copy(alpha = 0.06f)
+    val customBitmap = remember(customIcon) {
+        customIcon?.let { runCatching { it.toBitmap(64, 64) }.getOrNull() }
+    }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -712,109 +609,131 @@ private fun NavButton(
     ) {
         if (isHorizontal || dashboardStyle) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = if (isActive) activeIconColor else iconInactive,
-                    modifier = Modifier.size(18.dp)
-                )
+                if (customBitmap != null) {
+                    androidx.compose.foundation.Image(
+                        painter = BitmapPainter(customBitmap.asImageBitmap()),
+                        contentDescription = label,
+                        modifier = Modifier.size(ICON_SIZE)
+                    )
+                } else {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = if (isActive) activeIconColor else iconInactive,
+                        modifier = Modifier.size(ICON_SIZE)
+                    )
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     label,
                     color = if (isActive) activeIconColor else iconInactive,
                     fontSize = 7.sp,
-                    fontFamily = Poppins,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                     maxLines = 1
                 )
             }
         } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isActive) activeIconColor else iconInactive,
-                modifier = Modifier.size(ICON_SIZE)
-            )
+            if (customBitmap != null) {
+                androidx.compose.foundation.Image(
+                    painter = BitmapPainter(customBitmap.asImageBitmap()),
+                    contentDescription = label,
+                    modifier = Modifier.size(ICON_SIZE)
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isActive) activeIconColor else iconInactive,
+                    modifier = Modifier.size(ICON_SIZE)
+                )
+            }
         }
     }
 }
 
+private fun loadNavigationIcon(context: android.content.Context, icon: IconPackIcon): Drawable? =
+    if (icon.isConfigured) {
+        IconPackManager.loadDrawable(context, icon.packageName, icon.drawableName)
+    } else {
+        null
+    }
+
 fun DefaultShortcutIcon.toIcon(): ImageVector = when (this) {
     // Vehicle
-    DefaultShortcutIcon.CAR         -> Icons.Outlined.DirectionsCar
-    DefaultShortcutIcon.CAR_PLAY    -> CarPlayIcon
-    DefaultShortcutIcon.ELECTRIC_CAR -> Icons.Default.ElectricCar
-    DefaultShortcutIcon.GAS_STATION -> Icons.Default.LocalGasStation
-    DefaultShortcutIcon.EV_STATION  -> Icons.Default.EvStation
-    DefaultShortcutIcon.CAR_REPAIR  -> Icons.Default.CarRepair
-    DefaultShortcutIcon.TIRE_REPAIR -> Icons.Default.TireRepair
-    DefaultShortcutIcon.PARKING     -> Icons.Default.LocalParking
-    DefaultShortcutIcon.TRAFFIC     -> Icons.Default.Traffic
-    DefaultShortcutIcon.MOTORCYCLE  -> Icons.Default.TwoWheeler
-    DefaultShortcutIcon.DASHBOARD   -> Icons.Default.Speed
+    DefaultShortcutIcon.CAR          -> PhIcons.Regular.Car
+    DefaultShortcutIcon.CAR_PLAY     -> PhIcons.Regular.Airplay
+    DefaultShortcutIcon.ELECTRIC_CAR -> PhIcons.Regular.ChargingStation
+    DefaultShortcutIcon.GAS_STATION  -> PhIcons.Regular.GasPump
+    DefaultShortcutIcon.EV_STATION   -> PhIcons.Regular.ChargingStation
+    DefaultShortcutIcon.CAR_REPAIR   -> PhIcons.Regular.Wrench
+    DefaultShortcutIcon.TIRE_REPAIR  -> PhIcons.Regular.Tire
+    DefaultShortcutIcon.PARKING      -> PhIcons.Regular.LetterCircleP
+    DefaultShortcutIcon.TRAFFIC      -> PhIcons.Regular.TrafficSignal
+    DefaultShortcutIcon.MOTORCYCLE   -> PhIcons.Regular.Motorcycle
+    DefaultShortcutIcon.DASHBOARD    -> PhIcons.Regular.Speedometer
     // Navigation
-    DefaultShortcutIcon.MAP         -> Icons.Default.Map
-    DefaultShortcutIcon.NAVIGATION  -> DirectionOutlineIcon
-    DefaultShortcutIcon.COMPASS     -> Icons.Default.Explore
-    DefaultShortcutIcon.LOCATION    -> Icons.Default.Place
-    DefaultShortcutIcon.ROUTE       -> Icons.Default.Route
-    DefaultShortcutIcon.NEAR_ME     -> Icons.Default.NearMe
+    DefaultShortcutIcon.MAP          -> PhIcons.Regular.MapTrifold
+    DefaultShortcutIcon.NAVIGATION   -> PhIcons.Regular.NavigationArrow
+    DefaultShortcutIcon.COMPASS      -> PhIcons.Regular.Compass
+    DefaultShortcutIcon.LOCATION     -> PhIcons.Regular.MapPin
+    DefaultShortcutIcon.ROUTE        -> PhIcons.Regular.Path
+    DefaultShortcutIcon.NEAR_ME      -> PhIcons.Regular.Crosshair
     // Audio & media
-    DefaultShortcutIcon.RADIO       -> Icons.Outlined.Radio
-    DefaultShortcutIcon.MUSIC       -> Icons.Outlined.MusicNote
-    DefaultShortcutIcon.LIBRARY_MUSIC -> Icons.Default.LibraryMusic
-    DefaultShortcutIcon.PLAY        -> Icons.Default.PlayArrow
-    DefaultShortcutIcon.SPEAKER     -> Icons.Default.Speaker
-    DefaultShortcutIcon.HEADSET     -> Icons.Default.Headset
-    DefaultShortcutIcon.EQUALIZER   -> Icons.Default.Equalizer
-    DefaultShortcutIcon.VOLUME_UP   -> Icons.Default.VolumeUp
-    DefaultShortcutIcon.PODCAST     -> Icons.Default.Podcasts
-    DefaultShortcutIcon.MICROPHONE  -> Icons.Default.Mic
-    DefaultShortcutIcon.TV          -> Icons.Default.Tv
-    DefaultShortcutIcon.VIDEOCAM    -> Icons.Default.Videocam
+    DefaultShortcutIcon.RADIO         -> PhIcons.Regular.Radio
+    DefaultShortcutIcon.MUSIC         -> PhIcons.Regular.MusicNote
+    DefaultShortcutIcon.LIBRARY_MUSIC -> PhIcons.Regular.Playlist
+    DefaultShortcutIcon.PLAY          -> PhIcons.Regular.Play
+    DefaultShortcutIcon.SPEAKER       -> PhIcons.Regular.SpeakerHigh
+    DefaultShortcutIcon.HEADSET       -> PhIcons.Regular.Headset
+    DefaultShortcutIcon.EQUALIZER     -> PhIcons.Regular.Equalizer
+    DefaultShortcutIcon.VOLUME_UP     -> PhIcons.Regular.SpeakerHigh
+    DefaultShortcutIcon.PODCAST       -> PhIcons.Regular.Broadcast
+    DefaultShortcutIcon.MICROPHONE    -> PhIcons.Regular.Microphone
+    DefaultShortcutIcon.TV            -> PhIcons.Regular.Television
+    DefaultShortcutIcon.VIDEOCAM      -> PhIcons.Regular.VideoCamera
     // Communication
-    DefaultShortcutIcon.PHONE       -> Icons.Outlined.Phone
-    DefaultShortcutIcon.MESSAGE     -> Icons.Default.Message
-    DefaultShortcutIcon.CHAT        -> Icons.Default.Chat
-    DefaultShortcutIcon.EMAIL       -> Icons.Default.Email
-    DefaultShortcutIcon.CONTACTS    -> Icons.Default.Contacts
+    DefaultShortcutIcon.PHONE        -> PhIcons.Regular.Phone
+    DefaultShortcutIcon.MESSAGE      -> PhIcons.Regular.ChatText
+    DefaultShortcutIcon.CHAT         -> PhIcons.Regular.Chat
+    DefaultShortcutIcon.EMAIL        -> PhIcons.Regular.Envelope
+    DefaultShortcutIcon.CONTACTS     -> PhIcons.Regular.AddressBook
     // Connectivity
-    DefaultShortcutIcon.BLUETOOTH   -> Icons.Default.Bluetooth
-    DefaultShortcutIcon.WIFI        -> Icons.Default.Wifi
-    DefaultShortcutIcon.HOTSPOT     -> Icons.Default.WifiTethering
-    DefaultShortcutIcon.USB         -> Icons.Default.Usb
-    DefaultShortcutIcon.CAST        -> Icons.Default.Cast
-    DefaultShortcutIcon.CELLULAR    -> Icons.Default.SignalCellularAlt
+    DefaultShortcutIcon.BLUETOOTH    -> PhIcons.Regular.Bluetooth
+    DefaultShortcutIcon.WIFI         -> PhIcons.Regular.WifiHigh
+    DefaultShortcutIcon.HOTSPOT      -> PhIcons.Regular.Broadcast
+    DefaultShortcutIcon.USB          -> PhIcons.Regular.Usb
+    DefaultShortcutIcon.CAST         -> PhIcons.Regular.Screencast
+    DefaultShortcutIcon.CELLULAR     -> PhIcons.Regular.CellSignalFull
     // Lighting & climate
-    DefaultShortcutIcon.LIGHTBULB   -> Icons.Default.Lightbulb
-    DefaultShortcutIcon.BRIGHTNESS  -> Icons.Default.BrightnessHigh
-    DefaultShortcutIcon.AC          -> Icons.Default.AcUnit
-    DefaultShortcutIcon.FAN         -> Icons.Default.Air
-    DefaultShortcutIcon.THERMOSTAT  -> Icons.Default.Thermostat
-    DefaultShortcutIcon.SUN         -> Icons.Default.WbSunny
-    DefaultShortcutIcon.NIGHT       -> Icons.Default.DarkMode
-    DefaultShortcutIcon.RAIN        -> Icons.Default.WaterDrop
+    DefaultShortcutIcon.LIGHTBULB    -> PhIcons.Regular.Lightbulb
+    DefaultShortcutIcon.BRIGHTNESS   -> PhIcons.Regular.SunDim
+    DefaultShortcutIcon.AC           -> PhIcons.Regular.Snowflake
+    DefaultShortcutIcon.FAN          -> PhIcons.Regular.Fan
+    DefaultShortcutIcon.THERMOSTAT   -> PhIcons.Regular.Thermometer
+    DefaultShortcutIcon.SUN          -> PhIcons.Regular.Sun
+    DefaultShortcutIcon.NIGHT        -> PhIcons.Regular.Moon
+    DefaultShortcutIcon.RAIN         -> PhIcons.Regular.CloudRain
     // General utility
-    DefaultShortcutIcon.CAMERA      -> Icons.Outlined.CameraAlt
-    DefaultShortcutIcon.STAR        -> Icons.Default.Star
-    DefaultShortcutIcon.FAVORITE    -> Icons.Default.Favorite
-    DefaultShortcutIcon.TIMER       -> Icons.Default.Timer
-    DefaultShortcutIcon.CLOCK       -> Icons.Default.Schedule
-    DefaultShortcutIcon.ALARM       -> Icons.Default.Alarm
-    DefaultShortcutIcon.CALENDAR    -> Icons.Outlined.CalendarMonth
-    DefaultShortcutIcon.CALCULATOR  -> Icons.Default.Calculate
-    DefaultShortcutIcon.SHOPPING    -> Icons.Default.ShoppingCart
-    DefaultShortcutIcon.FOOD        -> Icons.Default.Restaurant
-    DefaultShortcutIcon.COFFEE      -> Icons.Default.LocalCafe
-    DefaultShortcutIcon.HOME        -> Icons.Outlined.Home
-    DefaultShortcutIcon.WORK        -> Icons.Default.Work
-    DefaultShortcutIcon.SEARCH      -> Icons.Default.Search
-    DefaultShortcutIcon.NOTIFICATIONS -> Icons.Default.Notifications
-    DefaultShortcutIcon.LOCK        -> Icons.Default.Lock
-    DefaultShortcutIcon.SECURITY    -> Icons.Default.Security
-    DefaultShortcutIcon.SETTINGS    -> Icons.Outlined.Settings
-    DefaultShortcutIcon.POWER       -> Icons.Default.PowerSettingsNew
-    DefaultShortcutIcon.DOWNLOAD    -> Icons.Default.Download
-    DefaultShortcutIcon.GLOBE       -> Icons.Default.Language
-    DefaultShortcutIcon.NONE        -> Icons.Default.Apps
+    DefaultShortcutIcon.CAMERA        -> PhIcons.Regular.Camera
+    DefaultShortcutIcon.STAR          -> PhIcons.Regular.Star
+    DefaultShortcutIcon.FAVORITE      -> PhIcons.Regular.Heart
+    DefaultShortcutIcon.TIMER         -> PhIcons.Regular.Timer
+    DefaultShortcutIcon.CLOCK         -> PhIcons.Regular.Clock
+    DefaultShortcutIcon.ALARM         -> PhIcons.Regular.Alarm
+    DefaultShortcutIcon.CALENDAR      -> PhIcons.Regular.Calendar
+    DefaultShortcutIcon.CALCULATOR    -> PhIcons.Regular.Calculator
+    DefaultShortcutIcon.SHOPPING      -> PhIcons.Regular.ShoppingCart
+    DefaultShortcutIcon.FOOD          -> PhIcons.Regular.ForkKnife
+    DefaultShortcutIcon.COFFEE        -> PhIcons.Regular.Coffee
+    DefaultShortcutIcon.HOME          -> PhIcons.Regular.House
+    DefaultShortcutIcon.WORK          -> PhIcons.Regular.Briefcase
+    DefaultShortcutIcon.SEARCH        -> PhIcons.Regular.MagnifyingGlass
+    DefaultShortcutIcon.NOTIFICATIONS -> PhIcons.Regular.Bell
+    DefaultShortcutIcon.LOCK          -> PhIcons.Regular.Lock
+    DefaultShortcutIcon.SECURITY      -> PhIcons.Regular.ShieldCheck
+    DefaultShortcutIcon.SETTINGS      -> PhIcons.Regular.Gear
+    DefaultShortcutIcon.POWER         -> PhIcons.Regular.Power
+    DefaultShortcutIcon.DOWNLOAD      -> PhIcons.Regular.Download
+    DefaultShortcutIcon.GLOBE         -> PhIcons.Regular.Globe
+    DefaultShortcutIcon.NONE          -> PhIcons.Regular.SquaresFour
 }

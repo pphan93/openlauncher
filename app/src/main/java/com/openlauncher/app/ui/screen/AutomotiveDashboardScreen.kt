@@ -20,11 +20,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Route
-import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +59,8 @@ import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.ui.theme.toFontFamily
 import com.openlauncher.app.util.LocationData
+import com.phosphor.icons.PhIcons
+import com.phosphor.icons.regular.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -87,6 +85,7 @@ private val DashboardRadius = RoundedCornerShape(18.dp)
 fun AutomotiveDashboardScreen(
     settings: AppSettings,
     weather: WeatherState?,
+    weatherError: String?,
     nowPlaying: NowPlayingState?,
     location: LocationData?,
     bearing: Float,
@@ -151,6 +150,13 @@ fun AutomotiveDashboardScreen(
                 )
                 DashboardWeatherClimateCard(
                     state = weather,
+                    statusMessage = when {
+                        weather != null -> null
+                        weatherError != null -> "Weather unavailable • check internet"
+                        location == null && settings.manualWeatherLatitude == null ->
+                            "Waiting for GPS • set a manual location in Settings"
+                        else -> "Loading weather…"
+                    },
                     metric = settings.unitSystem.name == "METRIC",
                     cardColor = visibleCard,
                     primary = primary,
@@ -250,7 +256,7 @@ private fun DashboardHeader(
             )
         } else {
             Icon(
-                Icons.Default.AccountCircle,
+                PhIcons.Regular.UserCircle,
                 "Driver profile",
                 tint = dashboardAccent,
                 modifier = Modifier.align(Alignment.CenterEnd).size(32.dp)
@@ -318,7 +324,7 @@ private fun DashboardMusicCard(
                 Box(
                     modifier = Modifier.size(artworkSize).clip(RoundedCornerShape(8.dp)).background(dashboardAccent),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.MusicNote, null, tint = dashboardAccentContent, modifier = Modifier.size(if (compact) 23.dp else 29.dp)) }
+                ) { Icon(PhIcons.Regular.MusicNote, null, tint = dashboardAccentContent, modifier = Modifier.size(if (compact) 23.dp else 29.dp)) }
             }
             Spacer(Modifier.width(if (compact) 10.dp else 16.dp))
             Column(Modifier.weight(1f)) {
@@ -334,7 +340,7 @@ private fun DashboardMusicCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onPrev, modifier = Modifier.size(controlSize)) {
-                Icon(Icons.Default.SkipPrevious, "Previous track", tint = primary, modifier = Modifier.size(controlIconSize))
+                Icon(PhIcons.Regular.SkipBack, "Previous track", tint = primary, modifier = Modifier.size(controlIconSize))
             }
             IconButton(
                 onClick = {
@@ -342,14 +348,14 @@ private fun DashboardMusicCard(
                 },
                 modifier = Modifier.size(controlSize)
             ) {
-                Icon(Icons.Default.FastRewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
+                Icon(PhIcons.Regular.Rewind, "Back 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
             }
             IconButton(
                 onClick = onPlayPause,
                 modifier = Modifier.size(playSize).clip(CircleShape).background(dashboardAccent)
             ) {
                 Icon(
-                    if (state?.isPlaying == true) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    if (state?.isPlaying == true) PhIcons.Regular.Pause else PhIcons.Regular.Play,
                     "Play or pause",
                     tint = dashboardAccentContent,
                     modifier = Modifier.size(if (compact) 22.dp else 25.dp)
@@ -361,10 +367,10 @@ private fun DashboardMusicCard(
                 },
                 modifier = Modifier.size(controlSize)
             ) {
-                Icon(Icons.Default.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
+                Icon(PhIcons.Regular.FastForward, "Forward 10 seconds", tint = primary, modifier = Modifier.size(controlIconSize))
             }
             IconButton(onClick = onNext, modifier = Modifier.size(controlSize)) {
-                Icon(Icons.Default.SkipNext, "Next track", tint = primary, modifier = Modifier.size(controlIconSize))
+                Icon(PhIcons.Regular.SkipForward, "Next track", tint = primary, modifier = Modifier.size(controlIconSize))
             }
         }
 
@@ -459,6 +465,7 @@ private fun formatPlaybackTime(milliseconds: Long): String {
 @Composable
 private fun DashboardWeatherClimateCard(
     state: WeatherState?,
+    statusMessage: String?,
     metric: Boolean,
     cardColor: Color,
     primary: Color,
@@ -489,7 +496,7 @@ private fun DashboardWeatherClimateCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (upcomingForecast.isEmpty()) {
-                Text("Forecast unavailable", color = secondary, fontSize = 8.sp)
+                Text(statusMessage ?: "Forecast unavailable", color = secondary, fontSize = 8.sp)
             } else {
                 upcomingForecast.forEach { day ->
                     DashboardForecastDay(
@@ -507,10 +514,10 @@ private fun DashboardWeatherClimateCard(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(secondary.copy(alpha = 0.09f)).padding(6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            ClimateStatus(Icons.Default.Air, "FAN", "—", primary, secondary)
-            ClimateStatus(Icons.Default.DeviceThermostat, "CABIN", "—°", primary, secondary)
-            ClimateStatus(Icons.Default.EventSeat, "DRIVER", "OFF", primary, secondary)
-            ClimateStatus(Icons.Default.EventSeat, "PASS.", "OFF", primary, secondary)
+            ClimateStatus(PhIcons.Regular.Fan, "FAN", "—", primary, secondary)
+            ClimateStatus(PhIcons.Regular.Thermometer, "CABIN", "—°", primary, secondary)
+            ClimateStatus(PhIcons.Regular.Seat, "DRIVER", "OFF", primary, secondary)
+            ClimateStatus(PhIcons.Regular.Seat, "PASS.", "OFF", primary, secondary)
         }
     }
 }
@@ -550,89 +557,48 @@ private fun DashboardWeatherIcon(
     isDay: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier) {
-        val yellow = Color(0xFFFFD83D)
-        val cloud = Color(0xFFF0F3F6)
-        val cloudShade = Color(0xFFB8C3CE)
-        val rain = Color(0xFF68C7FF)
-        val snow = Color(0xFFCDEEFF)
-
-        fun drawSun(center: Offset = Offset(size.width * 0.34f, size.height * 0.34f), radius: Float = size.minDimension * 0.17f) {
-            drawCircle(yellow, radius, center)
-            repeat(8) { index ->
-                val angle = Math.toRadians(index * 45.0)
-                val inner = radius * 1.35f
-                val outer = radius * 1.72f
-                drawLine(
-                    yellow,
-                    Offset(center.x + cos(angle).toFloat() * inner, center.y + sin(angle).toFloat() * inner),
-                    Offset(center.x + cos(angle).toFloat() * outer, center.y + sin(angle).toFloat() * outer),
-                    strokeWidth = size.minDimension * 0.055f,
-                    cap = StrokeCap.Round
-                )
-            }
+    val icon: ImageVector
+    val tint: Color
+    when (weatherCode) {
+        0 -> {
+            icon = if (isDay) PhIcons.Regular.Sun else PhIcons.Regular.Moon
+            tint = Color(0xFFFFD83D)
         }
-
-        fun drawFilledCloud() {
-            val shape = Path().apply {
-                moveTo(size.width * 0.16f, size.height * 0.69f)
-                cubicTo(size.width * 0.05f, size.height * 0.67f, size.width * 0.05f, size.height * 0.48f, size.width * 0.23f, size.height * 0.45f)
-                cubicTo(size.width * 0.29f, size.height * 0.22f, size.width * 0.61f, size.height * 0.18f, size.width * 0.72f, size.height * 0.42f)
-                cubicTo(size.width * 0.92f, size.height * 0.39f, size.width * 0.99f, size.height * 0.66f, size.width * 0.79f, size.height * 0.70f)
-                lineTo(size.width * 0.16f, size.height * 0.70f)
-                close()
-            }
-            drawPath(shape, cloudShade)
-            drawPath(shape, cloud.copy(alpha = 0.92f), style = Stroke(size.minDimension * 0.025f, cap = StrokeCap.Round))
+        1, 2 -> {
+            icon = if (isDay) PhIcons.Regular.CloudSun else PhIcons.Regular.CloudMoon
+            tint = Color(0xFFFFD83D)
         }
-
-        when (weatherCode) {
-            0 -> if (isDay) {
-                drawSun(center = center, radius = size.minDimension * 0.22f)
-            } else {
-                drawCircle(Color(0xFFFFF1A8), size.minDimension * 0.25f, center)
-                drawCircle(Color(0xFF181919), size.minDimension * 0.23f, Offset(center.x + size.width * 0.12f, center.y - size.height * 0.08f))
-            }
-            1, 2 -> {
-                drawSun()
-                drawFilledCloud()
-            }
-            45, 48 -> {
-                drawFilledCloud()
-                repeat(2) { index ->
-                    val y = size.height * (0.80f + index * 0.12f)
-                    drawLine(cloudShade, Offset(size.width * 0.22f, y), Offset(size.width * 0.78f, y), size.minDimension * 0.055f, StrokeCap.Round)
-                }
-            }
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> {
-                drawFilledCloud()
-                listOf(0.31f, 0.50f, 0.69f).forEach { x ->
-                    drawLine(rain, Offset(size.width * x, size.height * 0.76f), Offset(size.width * (x - 0.045f), size.height * 0.91f), size.minDimension * 0.07f, StrokeCap.Round)
-                }
-            }
-            71, 73, 75 -> {
-                drawFilledCloud()
-                listOf(0.34f, 0.52f, 0.70f).forEach { x ->
-                    drawCircle(snow, size.minDimension * 0.045f, Offset(size.width * x, size.height * 0.84f))
-                }
-            }
-            95, 96, 99 -> {
-                drawFilledCloud()
-                val bolt = Path().apply {
-                    moveTo(size.width * 0.55f, size.height * 0.69f)
-                    lineTo(size.width * 0.39f, size.height * 0.86f)
-                    lineTo(size.width * 0.53f, size.height * 0.86f)
-                    lineTo(size.width * 0.42f, size.height)
-                }
-                drawPath(bolt, yellow, style = Stroke(size.minDimension * 0.085f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-            }
-            else -> drawFilledCloud()
+        45, 48 -> {
+            icon = PhIcons.Regular.CloudFog
+            tint = Color(0xFFB8C3CE)
+        }
+        51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82 -> {
+            icon = PhIcons.Regular.CloudRain
+            tint = Color(0xFF68C7FF)
+        }
+        71, 73, 75, 77, 85, 86 -> {
+            icon = PhIcons.Regular.CloudSnow
+            tint = Color(0xFFCDEEFF)
+        }
+        95, 96, 99 -> {
+            icon = PhIcons.Regular.CloudLightning
+            tint = Color(0xFFFFD83D)
+        }
+        else -> {
+            icon = PhIcons.Regular.Cloud
+            tint = Color(0xFFB8C3CE)
         }
     }
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = modifier
+    )
 }
 
 @Composable
-private fun ClimateStatus(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, primary: Color, secondary: Color) {
+private fun ClimateStatus(icon: ImageVector, label: String, value: String, primary: Color, secondary: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = secondary, modifier = Modifier.size(16.dp))
         Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -662,7 +628,7 @@ private fun PhotoCarouselCard(
     ) {
         if (photoUris.isEmpty()) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.PhotoLibrary, null, tint = dashboardAccent, modifier = Modifier.size(44.dp))
+                Icon(PhIcons.Regular.ImagesSquare, null, tint = dashboardAccent, modifier = Modifier.size(44.dp))
                 Spacer(Modifier.height(10.dp))
                 Text("PHOTO JOURNEY", color = primary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text("Choose local, Google Photos, or Drive images in Settings", color = secondary, fontSize = 8.sp)
@@ -717,10 +683,13 @@ private fun DashboardCalendarCard(
     ) { granted -> hasPermission = granted }
 
     LaunchedEffect(hasPermission) {
-        events = if (hasPermission) {
-            withContext(Dispatchers.IO) { loadUpcomingCalendarEvents(context) }
-        } else {
-            emptyList()
+        if (!hasPermission) {
+            events = emptyList()
+            return@LaunchedEffect
+        }
+        while (true) {
+            events = withContext(Dispatchers.IO) { loadUpcomingCalendarEvents(context) }
+            delay(CALENDAR_REFRESH_INTERVAL_MS)
         }
     }
 
@@ -737,7 +706,7 @@ private fun DashboardCalendarCard(
                 .background(Brush.verticalGradient(listOf(Color(0xFF5BE27D), dashboardAccent, Color(0xFFFFBE73))))
         )
         Spacer(Modifier.width(18.dp))
-        Icon(Icons.Default.CalendarMonth, null, tint = primary, modifier = Modifier.size(27.dp))
+        Icon(PhIcons.Regular.Calendar, null, tint = primary, modifier = Modifier.size(27.dp))
         Spacer(Modifier.width(18.dp))
 
         when {
@@ -750,30 +719,38 @@ private fun DashboardCalendarCard(
             events.isEmpty() -> {
                 Column(Modifier.weight(1f)) {
                     Text("No upcoming events", color = primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Your next 7 days are clear", color = secondary, fontSize = 9.sp)
+                    Text("Your next 30 days are clear", color = secondary, fontSize = 9.sp)
                 }
             }
             else -> {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     HorizontalPager(
                         state = calendarPagerState,
+                        userScrollEnabled = calendarPageCount > 1,
+                        beyondViewportPageCount = 1,
                         modifier = Modifier.fillMaxSize()
                     ) { page ->
                         val firstIndex = page * CALENDAR_EVENTS_PER_PAGE
                         Row(
-                            modifier = Modifier.fillMaxSize().padding(end = if (calendarPageCount > 1) 32.dp else 0.dp),
+                            modifier = Modifier.fillMaxSize()
+                                .padding(end = if (calendarPageCount > 1) 36.dp else 0.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CalendarEventSummary(events[firstIndex], primary, secondary, Modifier.weight(1f))
+                            events.getOrNull(firstIndex)?.let { event ->
+                                CalendarEventSummary(event, primary, secondary, Modifier.weight(1f))
+                            }
                             VerticalDivider(
                                 modifier = Modifier.fillMaxHeight().padding(horizontal = 18.dp),
                                 color = secondary.copy(alpha = 0.13f)
                             )
-                            events.getOrNull(firstIndex + 1)?.let {
-                                CalendarEventSummary(it, primary, secondary, Modifier.weight(1f))
-                            } ?: Column(Modifier.weight(1f)) {
-                                Text("Nothing after that", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                                Text("Next 7 days", color = secondary, fontSize = 9.sp)
+                            events.getOrNull(firstIndex + 1)?.let { event ->
+                                CalendarEventSummary(event, primary, secondary, Modifier.weight(1f))
+                            } ?: Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text("No more events", color = primary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                Text("Next 30 days", color = secondary, fontSize = 9.sp)
                             }
                         }
                     }
@@ -783,7 +760,7 @@ private fun DashboardCalendarCard(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
-                                Icons.Default.SwipeLeft,
+                                PhIcons.Regular.HandSwipeLeft,
                                 contentDescription = "Swipe for more events",
                                 tint = secondary,
                                 modifier = Modifier.size(15.dp)
@@ -808,7 +785,7 @@ private fun CalendarEventSummary(
     secondary: Color,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier) {
+    Column(modifier, verticalArrangement = Arrangement.Center) {
         Text(
             event.title,
             color = primary,
@@ -827,7 +804,7 @@ private fun loadUpcomingCalendarEvents(context: Context): List<DashboardCalendar
     ) return emptyList()
 
     val now = System.currentTimeMillis()
-    val end = now + 7L * 24L * 60L * 60L * 1_000L
+    val end = now + 30L * 24L * 60L * 60L * 1_000L
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
         .appendPath(now.toString())
         .appendPath(end.toString())
@@ -862,7 +839,8 @@ private fun loadUpcomingCalendarEvents(context: Context): List<DashboardCalendar
 }
 
 private const val CALENDAR_EVENTS_PER_PAGE = 2
-private const val MAX_UPCOMING_CALENDAR_EVENTS = 20
+private const val MAX_UPCOMING_CALENDAR_EVENTS = 50
+private const val CALENDAR_REFRESH_INTERVAL_MS = 60_000L
 
 private fun calendarEventTimeLabel(startsAt: Long): String {
     val now = JavaCalendar.getInstance()
@@ -900,7 +878,7 @@ private fun VehicleStatusCard(
     val fuelPercent = vehicleData.fuelPercent?.coerceIn(0f, 100f)
     val displayedRange = vehicleData.rangeKm?.let { if (metric) it else it * 0.621371f }
     val doorStatus = vehicleData.doors?.let { if (it.anyOpen) "OPEN" else "CLOSED" } ?: "NO DATA"
-    val doorIcon = if (vehicleData.doors?.anyOpen == true) Icons.Default.LockOpen else Icons.Default.Lock
+    val doorIcon = if (vehicleData.doors?.anyOpen == true) PhIcons.Regular.LockOpen else PhIcons.Regular.Lock
     val vehiclePrimary = themePrimary
     val vehicleSecondary = themeSecondary
     val vehicleBackground = if (isDayMode) Color(0xFFE8EEF6) else Color(0xFF0B111C)
@@ -1055,7 +1033,7 @@ private fun VehicleStatusCard(
                     .background(telemetryBackground).padding(horizontal = 11.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Outlined.WaterDrop, null, tint = fuelAccent, modifier = Modifier.size(15.dp))
+                Icon(PhIcons.Regular.Drop, null, tint = fuelAccent, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(
                     fuelPercent?.roundToInt()?.let { "$it%" } ?: "--%",
@@ -1091,16 +1069,16 @@ private fun VehicleStatusCard(
         ) {
             VehicleStatusItem(doorIcon, "DOORS", doorStatus, doorAccent, vehiclePrimary, vehicleSecondary)
             VerticalDivider(Modifier.height(36.dp), color = vehicleSecondary.copy(alpha = 0.22f))
-            VehicleStatusItem(Icons.Outlined.Explore, "COMPASS", "${bearing.roundToInt()}° $heading", compassAccent, vehiclePrimary, vehicleSecondary)
+            VehicleStatusItem(PhIcons.Regular.Compass, "COMPASS", "${bearing.roundToInt()}° $heading", compassAccent, vehiclePrimary, vehicleSecondary)
             VerticalDivider(Modifier.height(36.dp), color = vehicleSecondary.copy(alpha = 0.22f))
-            VehicleStatusItem(Icons.Default.LocalGasStation, "FUEL SIDE", "LEFT", fuelSideAccent, vehiclePrimary, vehicleSecondary)
+            VehicleStatusItem(PhIcons.Regular.GasPump, "FUEL SIDE", "LEFT", fuelSideAccent, vehiclePrimary, vehicleSecondary)
         }
     }
 }
 
 @Composable
 private fun VehicleStatusItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     value: String,
     accent: Color,
@@ -1117,7 +1095,7 @@ private fun VehicleStatusItem(
 
 @Composable
 private fun VehicleMetricGauge(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     value: String,
     progress: Float,

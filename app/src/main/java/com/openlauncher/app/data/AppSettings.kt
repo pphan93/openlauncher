@@ -152,6 +152,20 @@ data class DriverProfilePhoto(
     val focusY: Float = 0f
 )
 
+data class IconPackIcon(
+    val packageName: String = "",
+    val drawableName: String = ""
+) {
+    val isConfigured: Boolean
+        get() = packageName.isNotBlank() && drawableName.isNotBlank()
+}
+
+data class NavigationIconSettings(
+    val home: IconPackIcon = IconPackIcon(),
+    val apps: IconPackIcon = IconPackIcon(),
+    val settings: IconPackIcon = IconPackIcon()
+)
+
 data class AppSettings(
     val vehicleName: String = "MY CAR",
     val showVehicleNameInStatusBar: Boolean = true,
@@ -176,6 +190,8 @@ data class AppSettings(
     val uiScale: Float = 1.0f,
     val unitSystem: UnitSystem = UnitSystem.METRIC,
     val appFont: AppFont = AppFont.POPPINS,
+    val iconPackPackage: String = "",
+    val navigationIcons: NavigationIconSettings = NavigationIconSettings(),
     val widgetOpacity: Float = 1.0f,
     val manualWeatherLocationName: String = "",
     val manualWeatherLatitude: Double? = null,
@@ -192,6 +208,9 @@ data class AppSettings(
     val dayNightMode: DayNightMode = DayNightMode.DARK,
     // Head unit's radio app — mirrored & controlled via its MediaSession
     val radioPackage: String = "",
+    val valetModeEnabled: Boolean = false,
+    val valetPinSalt: String = "",
+    val valetPinHash: String = "",
     val onboardingCompleted: Boolean = false,
     val compassOffset: Float = 0f,
     val gradientDirection: GradientDirection = GradientDirection.DIAGONAL,

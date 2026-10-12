@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
             val appsLoading by vm.appsLoading.collectAsStateWithLifecycle()
             val nowPlaying  by vm.nowPlaying.collectAsStateWithLifecycle()
             val weather     by vm.weather.collectAsStateWithLifecycle()
+            val weatherError by vm.weatherError.collectAsStateWithLifecycle()
             val location    by vm.location.collectAsStateWithLifecycle()
             val bearing     by vm.compassBearing.collectAsStateWithLifecycle()
             val vehicleData by vm.vehicleData.collectAsStateWithLifecycle()
@@ -115,6 +116,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 if (!settingsLoaded) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+                } else if (
+                    settings.valetModeEnabled &&
+                    settings.valetPinSalt.isNotBlank() &&
+                    settings.valetPinHash.isNotBlank()
+                ) {
+                    ValetModeScreen(
+                        pinSalt = settings.valetPinSalt,
+                        pinHash = settings.valetPinHash,
+                        onUnlocked = {
+                            vm.updateSettings { copy(valetModeEnabled = false) }
+                        }
+                    )
                 } else OpenLauncherTheme(
                     accent     = accent,
                     background = bg,
@@ -204,6 +217,7 @@ class MainActivity : ComponentActivity() {
                                     NavDestination.HOME -> AutomotiveDashboardScreen(
                                         settings = settings,
                                         weather = weather,
+                                        weatherError = weatherError,
                                         nowPlaying = nowPlaying,
                                         location = location,
                                         bearing = bearing,

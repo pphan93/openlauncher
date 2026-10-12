@@ -45,14 +45,20 @@ import com.openlauncher.app.data.DayNightMode
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.data.GradientDirection
+import com.openlauncher.app.data.IconPackIcon
 import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.data.UnitSystem
+import com.openlauncher.app.model.IconPackInfo
+import com.openlauncher.app.ui.components.IconPackPickerDialog
+import com.openlauncher.app.ui.components.IconPackDrawablePickerDialog
+import com.openlauncher.app.ui.components.ValetPinSetupDialog
 import com.openlauncher.app.ui.theme.LocalDayMode
 import com.openlauncher.app.util.SunriseSunset
 import com.openlauncher.app.util.BluetoothDriverDevice
 import com.openlauncher.app.util.clearPrivateImportDirectory
 import com.openlauncher.app.util.compatibleFilePickerIntent
 import com.openlauncher.app.util.importFileToPrivateStorage
+import com.openlauncher.app.util.IconPackManager
 import com.openlauncher.app.util.selectedUris
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -66,6 +72,12 @@ private data class PendingProfileCrop(
     val imageUri: String,
     val device: BluetoothDriverDevice? = null
 )
+
+private enum class NavigationIconTarget(val displayName: String) {
+    HOME("Home"),
+    APPS("Apps / Launcher"),
+    SETTINGS("Settings")
+}
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
 
@@ -89,6 +101,15 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showResetDialog       by remember { mutableStateOf(false) }
+    var showIconPackPicker    by remember { mutableStateOf(false) }
+    var showValetPinDialog    by remember { mutableStateOf(false) }
+    var enableValetAfterPinSave by remember { mutableStateOf(false) }
+    var installedIconPacks    by remember { mutableStateOf<List<IconPackInfo>>(emptyList()) }
+    var iconPacksLoading      by remember { mutableStateOf(true) }
+    var iconPackRefreshKey    by remember { mutableIntStateOf(0) }
+    var navigationIconTarget  by remember { mutableStateOf<NavigationIconTarget?>(null) }
+    var packDrawableNames     by remember { mutableStateOf<List<String>>(emptyList()) }
+    var packIconsLoading      by remember { mutableStateOf(false) }
     var showAccentPicker      by remember { mutableStateOf(false) }
     var showDashboardAccentPicker by remember { mutableStateOf(false) }
     var showBgPicker          by remember { mutableStateOf(false) }
@@ -106,6 +127,27 @@ fun SettingsScreen(
                     android.Manifest.permission.BLUETOOTH_CONNECT
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         )
+    }
+
+    LaunchedEffect(iconPackRefreshKey) {
+        iconPacksLoading = true
+        installedIconPacks = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            IconPackManager.discover(context)
+        }
+        iconPacksLoading = false
+    }
+
+    LaunchedEffect(settings.iconPackPackage, iconPackRefreshKey) {
+        if (settings.iconPackPackage.isBlank()) {
+            packDrawableNames = emptyList()
+            packIconsLoading = false
+        } else {
+            packIconsLoading = true
+            packDrawableNames = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                IconPackManager.listDrawableNames(context, settings.iconPackPackage)
+            }
+            packIconsLoading = false
+        }
     }
 
     val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
@@ -917,6 +959,59 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            val selectedIconPackName = installedIconPacks
+                .firstOrNull { it.packageName == settings.iconPackPackage }
+                ?.displayName
+            SettingsRow(
+                label = "App Icon Pack",
+                sublabel = when {
+                    settings.iconPackPackage.isBlank() -> "System app icons"
+                    selectedIconPackName != null -> selectedIconPackName
+                    else -> "Selected pack unavailable — using system icons"
+                },
+                icon = Icons.Default.Apps
+            ) {
+                TextButton(onClick = { showIconPackPicker = true }) {
+                    Text("CHOOSE", color = accent, fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+            }
+
+            SettingsDivider()
+
+            SettingsRow(
+                label = "Navigation Icons",
+                sublabel = if (settings.iconPackPackage.isBlank()) {
+                    "Choose an app icon pack first"
+                } else {
+                    "Select icons for Home, Apps, and Settings"
+                },
+                icon = Icons.Default.Home
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    NavigationIconTarget.entries.forEach { target ->
+                        val configured = when (target) {
+                            NavigationIconTarget.HOME -> settings.navigationIcons.home.isConfigured
+                            NavigationIconTarget.APPS -> settings.navigationIcons.apps.isConfigured
+                            NavigationIconTarget.SETTINGS -> settings.navigationIcons.settings.isConfigured
+                        }
+                        OutlinedButton(
+                            onClick = { navigationIconTarget = target },
+                            enabled = settings.iconPackPackage.isNotBlank(),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                target.name + if (configured) " ✓" else "",
+                                fontSize = 8.sp,
+                                color = if (configured) accent else LocalContentColor.current
+                            )
+                        }
+                    }
+                }
+            }
+
+            SettingsDivider()
+
             Column {
                 SettingsRow(
                     label = "Widget Transparency",
@@ -1300,6 +1395,45 @@ fun SettingsScreen(
         }
 
         // ── Updates ──────────────────────────────────────────────────────────
+        SettingsSection("Valet Mode") {
+            val hasValetPin = settings.valetPinSalt.isNotBlank() && settings.valetPinHash.isNotBlank()
+            SettingsButton(
+                label = if (hasValetPin) "Change Valet PIN" else "Set Valet PIN",
+                sublabel = if (hasValetPin) {
+                    "PIN is configured securely"
+                } else {
+                    "Create a 4–8 digit PIN before enabling valet mode"
+                },
+                icon = Icons.Default.Pin,
+                accent = accent,
+                onClick = {
+                    enableValetAfterPinSave = false
+                    showValetPinDialog = true
+                }
+            )
+
+            SettingsDivider()
+
+            SettingsRow(
+                label = "Enable Valet Mode",
+                sublabel = "Shows a blank screen until the PIN is entered",
+                icon = Icons.Default.Lock
+            ) {
+                Switch(
+                    checked = settings.valetModeEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled && !hasValetPin) {
+                            enableValetAfterPinSave = true
+                            showValetPinDialog = true
+                        } else {
+                            onUpdate { copy(valetModeEnabled = enabled) }
+                        }
+                    },
+                    colors = switchColors(accent)
+                )
+            }
+        }
+
         SettingsSection("Updates") {
             SettingsButton(
                 label = when (updateStatus) {
@@ -1374,6 +1508,79 @@ fun SettingsScreen(
             confirmLabel = "Reset",
             onConfirm    = { onReset(); showResetDialog = false },
             onDismiss    = { showResetDialog = false }
+        )
+    }
+
+    if (showIconPackPicker) {
+        IconPackPickerDialog(
+            packs = installedIconPacks,
+            selectedPackage = settings.iconPackPackage,
+            isLoading = iconPacksLoading,
+            accent = accent,
+            onSelect = { packageName ->
+                onUpdate { copy(iconPackPackage = packageName) }
+                showIconPackPicker = false
+            },
+            onRefresh = { iconPackRefreshKey++ },
+            onDismiss = { showIconPackPicker = false }
+        )
+    }
+
+    if (showValetPinDialog) {
+        ValetPinSetupDialog(
+            existingSalt = settings.valetPinSalt,
+            existingHash = settings.valetPinHash,
+            onSave = { record ->
+                onUpdate {
+                    copy(
+                        valetPinSalt = record.salt,
+                        valetPinHash = record.hash,
+                        valetModeEnabled = enableValetAfterPinSave
+                    )
+                }
+                showValetPinDialog = false
+                enableValetAfterPinSave = false
+            },
+            onDismiss = {
+                showValetPinDialog = false
+                enableValetAfterPinSave = false
+            }
+        )
+    }
+
+    navigationIconTarget?.let { target ->
+        IconPackDrawablePickerDialog(
+            title = "${target.displayName} Icon",
+            iconPackPackage = settings.iconPackPackage,
+            drawableNames = packDrawableNames,
+            isLoading = packIconsLoading,
+            accent = accent,
+            onSelect = { drawableName ->
+                val selectedIcon = IconPackIcon(settings.iconPackPackage, drawableName)
+                onUpdate {
+                    copy(
+                        navigationIcons = when (target) {
+                            NavigationIconTarget.HOME -> navigationIcons.copy(home = selectedIcon)
+                            NavigationIconTarget.APPS -> navigationIcons.copy(apps = selectedIcon)
+                            NavigationIconTarget.SETTINGS -> navigationIcons.copy(settings = selectedIcon)
+                        }
+                    )
+                }
+                navigationIconTarget = null
+            },
+            onUseDefault = {
+                onUpdate {
+                    copy(
+                        navigationIcons = when (target) {
+                            NavigationIconTarget.HOME -> navigationIcons.copy(home = IconPackIcon())
+                            NavigationIconTarget.APPS -> navigationIcons.copy(apps = IconPackIcon())
+                            NavigationIconTarget.SETTINGS -> navigationIcons.copy(settings = IconPackIcon())
+                        }
+                    )
+                }
+                navigationIconTarget = null
+            },
+            onDismiss = { navigationIconTarget = null }
         )
     }
 
