@@ -46,7 +46,7 @@ class VehicleDataManager(context: Context) {
     private val nwdReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent ?: return
-            readCommonPayload(intent, source = "NWD CAN")
+            readCommonPayload(intent, source = "NWD CAN", diagnostic = true)
         }
     }
 
@@ -81,10 +81,25 @@ class VehicleDataManager(context: Context) {
         update(doors = decodeDoorByte(raw), source = "Choiceway CAN")
     }
 
-    private fun readCommonPayload(intent: Intent, source: String? = null) {
-        val extras = intent.extras ?: return
+    private fun readCommonPayload(
+        intent: Intent,
+        source: String? = null,
+        diagnostic: Boolean = false
+    ) {
+        val extras = intent.extras
+        if (extras == null) {
+            if (diagnostic) Log.i(TAG, "NWD CAN event action=${intent.action} extras=<none>")
+            return
+        }
         val flattened = flattenExtras(extras)
         val normalized = flattened.keys.associateBy(::normalizeKey)
+
+        if (diagnostic) {
+            Log.i(
+                TAG,
+                "NWD CAN event action=${intent.action} extras=${describeExtras(flattened, includeValues = true)}"
+            )
+        }
 
         val fuel = findNumber(flattened, normalized, FUEL_PERCENT_KEYS)
             ?.toFloat()?.takeIf { it in 0f..100f }
@@ -100,8 +115,8 @@ class VehicleDataManager(context: Context) {
                 source = source ?: intent.action ?: "Vehicle broadcast"
             )
             Log.d(TAG, "Vehicle update from ${intent.action}: fuel=$fuel range=$range doors=$doors")
-        } else if (intent.action?.contains("nwd", ignoreCase = true) == true) {
-            Log.d(TAG, "Unmapped NWD payload ${intent.action}: ${describeExtras(flattened)}")
+        } else if (diagnostic || intent.action?.contains("nwd", ignoreCase = true) == true) {
+            Log.i(TAG, "Unmapped NWD payload ${intent.action}: ${describeExtras(flattened)}")
         }
 
         for ((key, value) in flattened) {
@@ -219,7 +234,7 @@ class VehicleDataManager(context: Context) {
         keys: Map<String, String>,
         candidates: Set<String>
     ): Number? {
-        val actual = candidates.firstNotNullOfOrNull(keys::get) ?: return null
+        val actual = matchingKey(keys, candidates) ?: return null
         return valueAsNumber(values[actual])
     }
 
@@ -230,7 +245,7 @@ class VehicleDataManager(context: Context) {
         findNumber(values, keys, DOOR_MASK_KEYS)?.let { return decodeGenericDoorMask(it.toInt()) }
 
         fun flag(candidates: Set<String>): Boolean? {
-            val actual = candidates.firstNotNullOfOrNull(keys::get) ?: return null
+            val actual = matchingKey(keys, candidates) ?: return null
             return valueAsBoolean(values[actual])
         }
 
@@ -283,10 +298,40 @@ class VehicleDataManager(context: Context) {
         else -> null
     }
 
-    private fun describeExtras(values: Map<String, Any?>): String = values.entries.joinToString {
-        val value = it.value
-        "${it.key}=${value?.javaClass?.simpleName ?: "null"}"
+    private fun matchingKey(keys: Map<String, String>, candidates: Set<String>): String? {
+        candidates.firstNotNullOfOrNull(keys::get)?.let { return it }
+        // A vendor may wrap the values in a nested Bundle, producing names such as
+        // `carInfo.fuelLevel`. Prefer the longest matching suffix to avoid a short,
+        // ambiguous field winning over a unit-specific one.
+        return keys.entries
+            .filter { (normalized, _) -> candidates.any(normalized::endsWith) }
+            .maxByOrNull { it.key.length }
+            ?.value
     }
+
+    private fun describeExtras(
+        values: Map<String, Any?>,
+        includeValues: Boolean = false
+    ): String = values.entries.joinToString(limit = MAX_LOGGED_EXTRAS, truncated = "…") {
+        val value = it.value
+        val type = value?.javaClass?.simpleName ?: "null"
+        val shown = if (includeValues) diagnosticValue(value) else null
+        "${it.key}=$type${shown?.let { text -> "($text)" }.orEmpty()}"
+    }
+
+    private fun diagnosticValue(value: Any?): String? = when (value) {
+        null -> null
+        is Number, is Boolean -> value.toString()
+        is CharSequence -> value.toString().take(MAX_LOGGED_VALUE_LENGTH)
+        is ByteArray -> value.toHexPreview()
+        is IntArray -> value.take(MAX_LOGGED_BYTES).joinToString(" ") { "%02X".format(it and 0xFF) }
+        is ShortArray -> value.take(MAX_LOGGED_BYTES).joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+        else -> null
+    }
+
+    private fun ByteArray.toHexPreview(): String = take(MAX_LOGGED_BYTES)
+        .joinToString(" ") { "%02X".format(it.toInt() and 0xFF) } +
+        if (size > MAX_LOGGED_BYTES) " …($size bytes)" else ""
 
     private fun decodeGenericDoorMask(raw: Int): VehicleDoorState {
         val decoded = decodeDoorByte(raw)
@@ -311,8 +356,9 @@ class VehicleDataManager(context: Context) {
                 @Suppress("DEPRECATION")
                 val packages = appContext.packageManager.getInstalledPackages(0)
                 val nwdG5 = isNwdG5Device()
+                Log.i(TAG, "NWD CAN discovery device=${deviceIdentity()} nwdG5=$nwdG5")
                 packages.asSequence()
-                    .mapNotNull { info ->
+                    .flatMap { info ->
                         val name = info.packageName.lowercase()
                         val label = runCatching {
                             info.applicationInfo?.loadLabel(appContext.packageManager)
@@ -320,21 +366,33 @@ class VehicleDataManager(context: Context) {
                         }.getOrDefault("")
                         val score = when {
                             name.startsWith("com.nwd") -> 100
+                            name.contains("raise") || label.contains("raise") -> 95
                             name.contains("canallinone") || label.contains("canallinone") -> 90
                             name.contains("mycar") || label == "my car" -> 80
-                            nwdG5 && (name.contains("canbus") || label.contains("canbus")) -> 70
+                            nwdG5 && (name.contains("can") || label.contains("can")) -> 70
                             nwdG5 && (name.contains("mcu") || label.contains("mcu")) -> 60
-                            nwdG5 && (name.contains("car") || label.contains("car")) -> 40
+                            nwdG5 && (name.contains("vehicle") || label.contains("vehicle")) -> 55
+                            nwdG5 && (name.contains("carinfo") || label.contains("car info")) -> 50
+                            nwdG5 && (name.contains("car") || label == "car") -> 40
                             else -> 0
                         }
-                        info.applicationInfo?.sourceDir?.takeIf { score > 0 }?.let { score to it }
+                        val app = info.applicationInfo
+                        if (score <= 0 || app == null) emptySequence()
+                        else sequenceOf(app.sourceDir, *app.splitSourceDirs.orEmpty())
+                            .filterNotNull()
+                            .map { Triple(score, info.packageName, it) }
                     }
                     .sortedByDescending { it.first }
-                    .map { it.second }
-                    .distinct()
+                    .distinctBy { it.third }
                     .take(MAX_NWD_PACKAGES)
                     .takeWhile { actions.size < MAX_DISCOVERED_ACTIONS }
-                    .forEach { actions += scanNwdActionStrings(File(it)) }
+                    .forEach { (_, packageName, path) ->
+                        val found = runCatching { scanNwdActionStrings(File(path)) }
+                            .onFailure { Log.w(TAG, "Unable to inspect $packageName", it) }
+                            .getOrDefault(emptySet())
+                        Log.i(TAG, "NWD CAN candidate=$packageName actions=${found.joinToString()}")
+                        actions += found
+                    }
             }.onFailure { Log.w(TAG, "Unable to inspect NWD packages", it) }
 
             if (actions.isEmpty()) return@Thread
@@ -350,24 +408,31 @@ class VehicleDataManager(context: Context) {
                         appContext.registerReceiver(nwdReceiver, filter)
                     }
                     nwdReceiverRegistered = true
-                    Log.i(TAG, "NWD CAN receiver started with ${registeredActions.size} actions")
+                    Log.i(
+                        TAG,
+                        "NWD CAN receiver started with ${registeredActions.size} actions: " +
+                            registeredActions.joinToString()
+                    )
                 }.onFailure { Log.w(TAG, "Unable to register NWD CAN receiver", it) }
             }
         }, "NwdCanDiscovery").apply { isDaemon = true }.start()
     }
 
     private fun isNwdG5Device(): Boolean {
-        val identity = listOf(
+        val identity = deviceIdentity().lowercase()
+        return identity.contains("nowada") || identity.contains("nwd_g5") ||
+            identity.contains("nwd g5") || identity.contains("k2401") ||
+            identity.contains("s212851")
+    }
+
+    private fun deviceIdentity(): String = listOf(
             Build.MANUFACTURER,
             Build.BRAND,
             Build.MODEL,
             Build.DEVICE,
             Build.PRODUCT,
             Build.DISPLAY
-        ).joinToString(" ").lowercase()
-        return identity.contains("nowada") || identity.contains("nwd_g5") ||
-            identity.contains("nwd g5") || identity.contains("k2401")
-    }
+        ).joinToString(" | ")
 
     private fun scanNwdActionStrings(apk: File): Set<String> {
         if (!apk.isFile) return emptySet()
@@ -500,6 +565,9 @@ class VehicleDataManager(context: Context) {
         private const val MAX_NWD_PACKAGES = 12
         private const val MIN_ACTION_LENGTH = 8
         private const val MAX_ACTION_LENGTH = 180
+        private const val MAX_LOGGED_EXTRAS = 30
+        private const val MAX_LOGGED_BYTES = 96
+        private const val MAX_LOGGED_VALUE_LENGTH = 160
 
         private fun normalizeStatic(key: String): String = key.lowercase().filter(Char::isLetterOrDigit)
 
