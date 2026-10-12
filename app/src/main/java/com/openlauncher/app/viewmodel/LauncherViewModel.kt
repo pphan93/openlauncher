@@ -234,6 +234,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val application = getApplication<Application>()
             val pm = application.packageManager
             val iconPack = IconPackManager.resolver(application, iconPackPackage)
+            val launcherComponents = listOf(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+            ).flatMap { intent -> pm.queryIntentActivities(intent, 0) }
+                .mapNotNull { result ->
+                    result.activityInfo?.let { info ->
+                        info.packageName to android.content.ComponentName(info.packageName, info.name)
+                    }
+                }
+                .toMap()
 
             // Use getInstalledApplications — same source Android Settings uses,
             // catches apps with no launcher/ACTION_MAIN activity (e.g. CarPlay companions)
@@ -244,13 +254,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         if (label.isBlank()) return@mapNotNull null
                         val launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName)
                             ?: pm.getLeanbackLaunchIntentForPackage(appInfo.packageName)
+                        val launcherComponent = launchIntent?.component
+                            ?: launcherComponents[appInfo.packageName]
                         AppInfo(
                             packageName = appInfo.packageName,
                             appName     = label,
-                            icon        = iconPack?.iconFor(appInfo.packageName, launchIntent?.component)
+                            icon        = iconPack?.iconFor(appInfo.packageName, launcherComponent)
                                 ?: pm.getApplicationIcon(appInfo),
                             isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0,
-                            isLaunchable = launchIntent != null
+                            isLaunchable = launchIntent != null || launcherComponent != null
                         )
                     } catch (_: Exception) { null }
                 }
@@ -263,8 +275,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchApp(packageName: String) {
         val app = getApplication<Application>()
         val pm  = app.packageManager
-        // Try standard launch intent first; fall back to first ACTION_MAIN activity in package
+        // Try the package helper first, then explicitly resolve launcher activities.
         val intent = pm.getLaunchIntentForPackage(packageName)
+            ?: pm.getLeanbackLaunchIntentForPackage(packageName)
+            ?: listOf(Intent.CATEGORY_LAUNCHER, Intent.CATEGORY_LEANBACK_LAUNCHER)
+                .asSequence()
+                .flatMap { category ->
+                    pm.queryIntentActivities(
+                        Intent(Intent.ACTION_MAIN).addCategory(category).setPackage(packageName),
+                        0
+                    ).asSequence()
+                }
+                .firstOrNull()
+                ?.activityInfo
+                ?.let { ai ->
+                    Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        setClassName(ai.packageName, ai.name)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
             ?: pm.queryIntentActivities(
                 Intent(Intent.ACTION_MAIN).setPackage(packageName), 0
             ).firstOrNull()?.activityInfo?.let { ai ->
