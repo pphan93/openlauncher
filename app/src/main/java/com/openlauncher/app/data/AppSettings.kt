@@ -169,6 +169,7 @@ data class NavigationIconSettings(
 data class AppSettings(
     val vehicleName: String = "MY CAR",
     val showVehicleNameInStatusBar: Boolean = true,
+    val drivingAnimationEnabled: Boolean = true,
     val licensePlate: String = "",
     val licensePlateRegion: LicensePlateRegion = LicensePlateRegion.ALBERTA,
     val licensePlateTextColor: Int = Color(0xFF101216).toArgb(),

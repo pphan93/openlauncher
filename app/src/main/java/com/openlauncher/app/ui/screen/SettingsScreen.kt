@@ -665,6 +665,22 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            SettingsRow(
+                label = "Driving Animation",
+                sublabel = "Animate the road and wind effects on the vehicle card",
+                icon = Icons.Default.Animation
+            ) {
+                Switch(
+                    checked = settings.drivingAnimationEnabled,
+                    onCheckedChange = { enabled ->
+                        onUpdate { copy(drivingAnimationEnabled = enabled) }
+                    },
+                    colors = switchColors(accent)
+                )
+            }
+
+            SettingsDivider()
+
             var plateInput by remember(settings.licensePlate) { mutableStateOf(settings.licensePlate) }
             SettingsRow(
                 label = "License Plate",

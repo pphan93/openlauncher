@@ -20,6 +20,7 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
         val SHOW_VEHICLE_NAME_IN_STATUS_BAR = booleanPreferencesKey("show_vehicle_name_in_status_bar")
+        val DRIVING_ANIMATION_ENABLED = booleanPreferencesKey("driving_animation_enabled")
         val LICENSE_PLATE      = stringPreferencesKey("license_plate")
         val LICENSE_PLATE_REGION = stringPreferencesKey("license_plate_region")
         val LICENSE_PLATE_TEXT_COLOR = intPreferencesKey("license_plate_text_color")
@@ -89,6 +90,8 @@ class SettingsRepository(private val context: Context) {
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
                 showVehicleNameInStatusBar = prefs[Keys.SHOW_VEHICLE_NAME_IN_STATUS_BAR]
                     ?: defaults.showVehicleNameInStatusBar,
+                drivingAnimationEnabled = prefs[Keys.DRIVING_ANIMATION_ENABLED]
+                    ?: defaults.drivingAnimationEnabled,
                 licensePlate   = prefs[Keys.LICENSE_PLATE]     ?: defaults.licensePlate,
                 licensePlateRegion = prefs[Keys.LICENSE_PLATE_REGION]?.let {
                     runCatching { LicensePlateRegion.valueOf(it) }.getOrNull()
@@ -176,6 +179,7 @@ class SettingsRepository(private val context: Context) {
     private fun writeSettings(prefs: MutablePreferences, s: AppSettings) {
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
             prefs[Keys.SHOW_VEHICLE_NAME_IN_STATUS_BAR] = s.showVehicleNameInStatusBar
+            prefs[Keys.DRIVING_ANIMATION_ENABLED] = s.drivingAnimationEnabled
             prefs[Keys.LICENSE_PLATE]      = s.licensePlate
             prefs[Keys.LICENSE_PLATE_REGION] = s.licensePlateRegion.name
             prefs[Keys.LICENSE_PLATE_TEXT_COLOR] = s.licensePlateTextColor
