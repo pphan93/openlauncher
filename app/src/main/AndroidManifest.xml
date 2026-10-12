@@ -42,6 +42,7 @@
 
     <!-- Required on API 30+ so PackageManager returns ALL launcher apps -->
     <queries>
+        <package android:name="com.nwd.can.setting" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

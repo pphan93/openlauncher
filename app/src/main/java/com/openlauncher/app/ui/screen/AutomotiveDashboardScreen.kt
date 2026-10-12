@@ -55,6 +55,8 @@ import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.DailyForecast
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.model.VehicleData
+import com.openlauncher.app.model.ClimateTemperatureState
+import com.openlauncher.app.model.VehicleClimateState
 import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.ui.theme.toFontFamily
@@ -150,6 +152,7 @@ fun AutomotiveDashboardScreen(
                 )
                 DashboardWeatherClimateCard(
                     state = weather,
+                    climate = vehicleData.climate,
                     statusMessage = when {
                         weather != null -> null
                         weatherError != null -> "Weather unavailable • check internet"
@@ -465,6 +468,7 @@ private fun formatPlaybackTime(milliseconds: Long): String {
 @Composable
 private fun DashboardWeatherClimateCard(
     state: WeatherState?,
+    climate: VehicleClimateState?,
     statusMessage: String?,
     metric: Boolean,
     cardColor: Color,
@@ -514,11 +518,67 @@ private fun DashboardWeatherClimateCard(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(secondary.copy(alpha = 0.09f)).padding(6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            ClimateStatus(PhIcons.Regular.Fan, "FAN", "—", primary, secondary)
-            ClimateStatus(PhIcons.Regular.Thermometer, "CABIN", "—°", primary, secondary)
-            ClimateStatus(PhIcons.Regular.Seat, "DRIVER", "OFF", primary, secondary)
-            ClimateStatus(PhIcons.Regular.Seat, "PASS.", "OFF", primary, secondary)
+            ClimateStatus(
+                PhIcons.Regular.Fan,
+                "FAN",
+                climate?.fanDisplay() ?: "—",
+                primary,
+                secondary
+            )
+            ClimateStatus(
+                PhIcons.Regular.Thermometer,
+                "TEMP",
+                climate?.driverTemperatureDisplay(metric) ?: "—°",
+                primary,
+                secondary
+            )
+            ClimateStatus(
+                PhIcons.Regular.Seat,
+                "DRIVER",
+                climate?.seatDisplay(driver = true) ?: "—",
+                primary,
+                secondary
+            )
+            ClimateStatus(
+                PhIcons.Regular.Seat,
+                "PASS.",
+                climate?.seatDisplay(driver = false) ?: "—",
+                primary,
+                secondary
+            )
         }
+    }
+}
+
+private fun VehicleClimateState.fanDisplay(): String = when {
+    automatic -> "AUTO"
+    fanLevel <= 0 -> "OFF"
+    fanLevelMax != null -> "$fanLevel/$fanLevelMax"
+    else -> fanLevel.toString()
+}
+
+private fun VehicleClimateState.driverTemperatureDisplay(metric: Boolean): String =
+    when (driverTemperatureState) {
+        ClimateTemperatureState.LOW -> "LO"
+        ClimateTemperatureState.HIGH -> "HI"
+        ClimateTemperatureState.UNKNOWN -> "—°"
+        ClimateTemperatureState.VALUE -> driverTemperatureCelsius?.let { celsius ->
+            if (metric) {
+                val rounded = (celsius * 2f).roundToInt() / 2f
+                if (rounded % 1f == 0f) "${rounded.roundToInt()}°" else "$rounded°"
+            } else {
+                "${(celsius * 9f / 5f + 32f).roundToInt()}°"
+            }
+        } ?: "—°"
+    }
+
+private fun VehicleClimateState.seatDisplay(driver: Boolean): String {
+    val heat = if (driver) driverSeatHeatLevel else passengerSeatHeatLevel
+    val cool = if (driver) driverSeatCoolLevel else passengerSeatCoolLevel
+    return when {
+        heat > 0 -> "H$heat"
+        cool > 0 -> "C$cool"
+        else -> "OFF"
     }
 }
 

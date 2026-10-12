@@ -8,7 +8,9 @@ import android.os.Bundle
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import com.openlauncher.app.model.VehicleClimateState
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.model.VehicleDoorState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +31,16 @@ class VehicleDataManager(context: Context) {
     private val appContext = context.applicationContext
     private val _data = MutableStateFlow(VehicleData())
     val data: StateFlow<VehicleData> = _data.asStateFlow()
+    private val nwdCanServiceClient =
+        NwdCanServiceClient(appContext) { fuel, range, doors, climate ->
+            update(
+                fuelPercent = fuel,
+                rangeKm = range,
+                doors = doors,
+                climate = climate,
+                source = "NWD CAN service"
+            )
+        }
     private var registered = false
     private var nwdReceiverRegistered = false
     private var nwdDiscoveryStarted = false
@@ -38,6 +50,14 @@ class VehicleDataManager(context: Context) {
             intent ?: return
             when (intent.action) {
                 ACTION_CHOICEWAY_DOORS -> readChoicewayDoors(intent)
+                ACTION_NWD_DOOR_STATE_CHANGE -> {
+                    val mappedPayload = readCommonPayload(
+                        intent,
+                        source = "NWD CAN",
+                        diagnostic = true
+                    )
+                    if (!mappedPayload) readNwdDoorSetting()
+                }
                 else -> readCommonPayload(intent)
             }
         }
@@ -63,6 +83,8 @@ class VehicleDataManager(context: Context) {
         }
         registered = true
         Log.i(TAG, "Vehicle data receiver started")
+        if (isNwdG5Device()) readNwdDoorSetting()
+        nwdCanServiceClient.start()
         discoverAndRegisterNwdActions()
     }
 
@@ -73,6 +95,7 @@ class VehicleDataManager(context: Context) {
             runCatching { appContext.unregisterReceiver(nwdReceiver) }
             nwdReceiverRegistered = false
         }
+        nwdCanServiceClient.stop()
         registered = false
     }
 
@@ -85,11 +108,11 @@ class VehicleDataManager(context: Context) {
         intent: Intent,
         source: String? = null,
         diagnostic: Boolean = false
-    ) {
+    ): Boolean {
         val extras = intent.extras
         if (extras == null) {
             if (diagnostic) Log.i(TAG, "NWD CAN event action=${intent.action} extras=<none>")
-            return
+            return false
         }
         val flattened = flattenExtras(extras)
         val normalized = flattened.keys.associateBy(::normalizeKey)
@@ -122,6 +145,29 @@ class VehicleDataManager(context: Context) {
         for ((key, value) in flattened) {
             valueAsBytePayload(key, value)?.let(::decodeRaiseFrames)
         }
+        return fuel != null || range != null || doors != null
+    }
+
+    /**
+     * NWD G5's CAN app publishes only whether its door overlay should be visible. That is still
+     * enough for the dashboard's aggregate OPEN/CLOSED indicator; it does not identify a specific
+     * door, so the first flag is used solely to carry the aggregate state through VehicleDoorState.
+     */
+    private fun readNwdDoorSetting(): Boolean {
+        val raw = runCatching {
+            Settings.System.getString(appContext.contentResolver, NWD_DOOR_STATE_SETTING)
+        }.onFailure { Log.w(TAG, "Unable to read NWD door state", it) }
+            .getOrNull()
+            ?.trim()
+            ?.toIntOrNull()
+            ?: return false
+
+        update(
+            doors = VehicleDoorState(frontLeftOpen = raw != 0),
+            source = "NWD CAN"
+        )
+        Log.d(TAG, "NWD door state setting $NWD_DOOR_STATE_SETTING=$raw")
+        return true
     }
 
     /** Decode only checksum-valid RAISE frames: 2E command length payload checksum. */
@@ -217,6 +263,7 @@ class VehicleDataManager(context: Context) {
         fuelPercent: Float? = null,
         rangeKm: Float? = null,
         doors: VehicleDoorState? = null,
+        climate: VehicleClimateState? = null,
         source: String
     ) {
         val old = _data.value
@@ -224,6 +271,7 @@ class VehicleDataManager(context: Context) {
             fuelPercent = fuelPercent ?: old.fuelPercent,
             rangeKm = rangeKm ?: old.rangeKm,
             doors = doors ?: old.doors,
+            climate = climate ?: old.climate,
             source = source,
             updatedAtMs = System.currentTimeMillis()
         )
@@ -365,15 +413,16 @@ class VehicleDataManager(context: Context) {
                                 ?.toString()?.lowercase().orEmpty()
                         }.getOrDefault("")
                         val score = when {
+                            name == NWD_CAN_PACKAGE -> 200
+                            name.contains("raise") || label.contains("raise") -> 190
+                            name.contains("canallinone") || label.contains("canallinone") -> 180
+                            name.contains("can") || label.contains("can") -> 170
+                            name.contains("mycar") || label == "my car" -> 160
+                            nwdG5 && (name.contains("mcu") || label.contains("mcu")) -> 150
+                            nwdG5 && (name.contains("vehicle") || label.contains("vehicle")) -> 140
+                            nwdG5 && (name.contains("carinfo") || label.contains("car info")) -> 130
+                            nwdG5 && (name.contains("car") || label == "car") -> 120
                             name.startsWith("com.nwd") -> 100
-                            name.contains("raise") || label.contains("raise") -> 95
-                            name.contains("canallinone") || label.contains("canallinone") -> 90
-                            name.contains("mycar") || label == "my car" -> 80
-                            nwdG5 && (name.contains("can") || label.contains("can")) -> 70
-                            nwdG5 && (name.contains("mcu") || label.contains("mcu")) -> 60
-                            nwdG5 && (name.contains("vehicle") || label.contains("vehicle")) -> 55
-                            nwdG5 && (name.contains("carinfo") || label.contains("car info")) -> 50
-                            nwdG5 && (name.contains("car") || label == "car") -> 40
                             else -> 0
                         }
                         val app = info.applicationInfo
@@ -396,7 +445,12 @@ class VehicleDataManager(context: Context) {
             }.onFailure { Log.w(TAG, "Unable to inspect NWD packages", it) }
 
             if (actions.isEmpty()) return@Thread
-            val registeredActions = actions.take(MAX_DISCOVERED_ACTIONS)
+            // ACTIONS are already registered synchronously. Do not deliver the same event to
+            // both receivers if an APK scan rediscovers one of those constants.
+            val registeredActions = actions
+                .filterNot { it in ACTIONS }
+                .take(MAX_DISCOVERED_ACTIONS)
+            if (registeredActions.isEmpty()) return@Thread
             Handler(Looper.getMainLooper()).post {
                 if (!registered || nwdReceiverRegistered) return@post
                 val filter = IntentFilter().apply { registeredActions.forEach(::addAction) }
@@ -507,12 +561,17 @@ class VehicleDataManager(context: Context) {
         private const val EXTRA_CHOICEWAY_DOORS = "EventUtils.CAR_DOOR_DATA"
         private const val ACTION_CHOICEWAY_RAW_CAN =
             "com.choiceway.eventcenter.EventUtils.MCU_MSG_CAN_ALL_INFO"
+        private const val ACTION_NWD_DOOR_STATE_CHANGE =
+            "com.nwd.ACTION_CAN_DOOR_STATE_CHANGE"
+        private const val NWD_DOOR_STATE_SETTING = "can_door_show_state"
+        private const val NWD_CAN_PACKAGE = "com.nwd.can.setting"
 
         // Seen on several vendor integrations. They are harmless when absent and parsed only
         // when an exact, unit-bearing extra name is present.
         private val ACTIONS = arrayOf(
             ACTION_CHOICEWAY_DOORS,
             ACTION_CHOICEWAY_RAW_CAN,
+            ACTION_NWD_DOOR_STATE_CHANGE,
             "com.szchoiceway.eventcenter.EventUtils.CAN_CAR_TIRP_INFO",
             "com.szchoiceway.eventcenter.EventUtils.CAN_FUEL_CONSUMPTION_INFOR",
             "com.syu.carinfo",
