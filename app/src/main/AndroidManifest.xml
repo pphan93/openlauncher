@@ -30,6 +30,8 @@
 
     <!-- User-approved access used by the Quick Controls brightness slider. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <!-- Optional on head units: lets the QF vehicle app share climate/CAN data with this launcher. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <!-- Wallpaper from gallery -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"

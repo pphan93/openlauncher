@@ -1,15 +1,18 @@
 package com.openlauncher.app.util
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import com.openlauncher.app.model.ClimateTemperatureState
 import com.openlauncher.app.model.VehicleClimateState
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.model.VehicleDoorState
@@ -50,6 +53,7 @@ class VehicleDataManager(context: Context) {
             intent ?: return
             when (intent.action) {
                 ACTION_CHOICEWAY_DOORS -> readChoicewayDoors(intent)
+                ACTION_QF_DATA_SHARE -> readQfSharedData(intent)
                 ACTION_NWD_DOOR_STATE_CHANGE -> {
                     val mappedPayload = readCommonPayload(
                         intent,
@@ -83,6 +87,7 @@ class VehicleDataManager(context: Context) {
         }
         registered = true
         Log.i(TAG, "Vehicle data receiver started")
+        registerQfVehicleShare()
         if (isNwdG5Device()) readNwdDoorSetting()
         nwdCanServiceClient.start()
         discoverAndRegisterNwdActions()
@@ -102,6 +107,97 @@ class VehicleDataManager(context: Context) {
     private fun readChoicewayDoors(intent: Intent) {
         val raw = numberExtra(intent, EXTRA_CHOICEWAY_DOORS)?.toInt() ?: return
         update(doors = decodeDoorByte(raw), source = "Choiceway CAN")
+    }
+
+    private fun registerQfVehicleShare() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            appContext.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.i(
+                TAG,
+                "QF climate sharing needs WRITE_SECURE_SETTINGS; NWD service callbacks remain enabled"
+            )
+            return
+        }
+
+        runCatching {
+            val packageName = appContext.packageName
+            val packages = Settings.Global.getString(appContext.contentResolver, QF_ALL_PACKAGES_KEY)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter { it.isNotEmpty() && it != "null" }
+            if (packageName !in packages) {
+                Settings.Global.putString(
+                    appContext.contentResolver,
+                    QF_ALL_PACKAGES_KEY,
+                    (packages + packageName).joinToString(",")
+                )
+            }
+            QF_SHARE_SETTING_SUFFIXES.forEach { suffix ->
+                Settings.Global.putInt(appContext.contentResolver, packageName + suffix, 1)
+            }
+        }.onSuccess {
+            Log.i(TAG, "Registered Open Launcher for QF vehicle and climate sharing")
+        }.onFailure {
+            Log.w(TAG, "Unable to register QF vehicle sharing; using NWD service callbacks", it)
+        }
+    }
+
+    /** Decode the native vehicle packets shared by NWD/QF firmware with launcher apps. */
+    private fun readQfSharedData(intent: Intent) {
+        val packet = intent.getByteArrayExtra(EXTRA_QF_DATA_SHARE) ?: return
+        if (packet.size < 2 || (packet[0].toInt() and 0xFF) != QF_SHARE_HEADER) return
+
+        when (packet[1].toInt() and 0xFF) {
+            QF_SHARE_CLIMATE -> decodeQfClimate(packet)?.let { climate ->
+                update(climate = climate, source = "NWD/QF vehicle share")
+                Log.d(TAG, "Vehicle climate update from NWD/QF data share: $climate")
+            }
+            QF_SHARE_BODY -> decodeQfRangeKm(packet)?.let { rangeKm ->
+                update(rangeKm = rangeKm, source = "NWD/QF vehicle share")
+            }
+        }
+    }
+
+    private fun decodeQfClimate(packet: ByteArray): VehicleClimateState? {
+        if (packet.size < QF_CLIMATE_MIN_SIZE) return null
+        val primaryFlags = packet[2].toInt() and 0xFF
+        val secondaryFlags = packet[3].toInt() and 0xFF
+        val fanAndMode = packet[4].toInt() and 0xFF
+        val driverTemperature = decodeQfTemperature(packet[7].toInt() and 0xFF)
+        val passengerTemperature = decodeQfTemperature(packet[8].toInt() and 0xFF)
+        val seatHeat = packet[10].toInt() and 0xFF
+
+        return VehicleClimateState(
+            acOn = primaryFlags and 0x40 != 0,
+            automatic = primaryFlags and 0x24 != 0,
+            fanLevel = fanAndMode and 0x0F,
+            driverTemperatureCelsius = driverTemperature.first,
+            driverTemperatureState = driverTemperature.second,
+            passengerTemperatureCelsius = passengerTemperature.first,
+            passengerTemperatureState = passengerTemperature.second,
+            driverSeatHeatLevel = (seatHeat ushr 4) and 0x0F,
+            passengerSeatHeatLevel = seatHeat and 0x0F,
+            frontDefrostOn = secondaryFlags and 0x80 != 0,
+            rearDefrostOn = secondaryFlags and 0x40 != 0
+        )
+    }
+
+    private fun decodeQfTemperature(raw: Int): Pair<Float?, ClimateTemperatureState> = when (raw) {
+        QF_TEMPERATURE_LOW -> null to ClimateTemperatureState.LOW
+        QF_TEMPERATURE_HIGH -> null to ClimateTemperatureState.HIGH
+        QF_TEMPERATURE_UNKNOWN -> null to ClimateTemperatureState.UNKNOWN
+        else -> raw / 2f to ClimateTemperatureState.VALUE
+    }
+
+    private fun decodeQfRangeKm(packet: ByteArray): Float? {
+        if (packet.size < QF_BODY_RANGE_END_INDEX + 1) return null
+        val high = packet[QF_BODY_RANGE_START_INDEX].toInt() and 0xFF
+        val low = packet[QF_BODY_RANGE_END_INDEX].toInt() and 0xFF
+        if (high == UNKNOWN_BYTE && low == UNKNOWN_BYTE) return null
+        return (((high shl 8) or low) / 10f).takeIf { it in 0f..3_000f }
     }
 
     private fun readCommonPayload(
@@ -563,6 +659,8 @@ class VehicleDataManager(context: Context) {
             "com.choiceway.eventcenter.EventUtils.MCU_MSG_CAN_ALL_INFO"
         private const val ACTION_NWD_DOOR_STATE_CHANGE =
             "com.nwd.ACTION_CAN_DOOR_STATE_CHANGE"
+        private const val ACTION_QF_DATA_SHARE = "com.qf.vehicle.action.DATA_SHARE"
+        private const val EXTRA_QF_DATA_SHARE = "extra_DATA_SHARE"
         private const val NWD_DOOR_STATE_SETTING = "can_door_show_state"
         private const val NWD_CAN_PACKAGE = "com.nwd.can.setting"
 
@@ -572,6 +670,7 @@ class VehicleDataManager(context: Context) {
             ACTION_CHOICEWAY_DOORS,
             ACTION_CHOICEWAY_RAW_CAN,
             ACTION_NWD_DOOR_STATE_CHANGE,
+            ACTION_QF_DATA_SHARE,
             "com.szchoiceway.eventcenter.EventUtils.CAN_CAR_TIRP_INFO",
             "com.szchoiceway.eventcenter.EventUtils.CAN_FUEL_CONSUMPTION_INFOR",
             "com.syu.carinfo",
@@ -635,5 +734,21 @@ class VehicleDataManager(context: Context) {
         private const val RAISE_DOORS_COMMAND = 0x24
         private const val RAISE_DISTANCE_MILES = 0x01
         private const val MILES_TO_KM = 1.609344f
+        private const val QF_SHARE_HEADER = 0x2E
+        private const val QF_SHARE_CLIMATE = 0x01
+        private const val QF_SHARE_BODY = 0x02
+        private const val QF_CLIMATE_MIN_SIZE = 11
+        private const val QF_BODY_RANGE_START_INDEX = 18
+        private const val QF_BODY_RANGE_END_INDEX = 19
+        private const val QF_TEMPERATURE_LOW = 0x00
+        private const val QF_TEMPERATURE_UNKNOWN = 0xFE
+        private const val QF_TEMPERATURE_HIGH = 0xFF
+        private const val UNKNOWN_BYTE = 0xFF
+        private const val QF_ALL_PACKAGES_KEY = "KeyAllPackages"
+        private val QF_SHARE_SETTING_SUFFIXES = arrayOf(
+            "KeyShareCarbodyState",
+            "KeyShareAcState",
+            "KeyShareDoorWindow"
+        )
     }
 }

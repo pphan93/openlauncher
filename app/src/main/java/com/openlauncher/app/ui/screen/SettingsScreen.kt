@@ -681,6 +681,48 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            var fullTankRangeInput by remember(settings.fullTankRangeKm) {
+                mutableStateOf(settings.fullTankRangeKm.toInt().toString())
+            }
+            val parsedFullTankRange = fullTankRangeInput.toFloatOrNull()
+            SettingsRow(
+                label = "Full-Tank Range",
+                sublabel = "Used to estimate fuel percentage from remaining range",
+                icon = Icons.Default.LocalGasStation
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedTextField(
+                        value = fullTankRangeInput,
+                        onValueChange = { input ->
+                            fullTankRangeInput = input.filter(Char::isDigit).take(4)
+                        },
+                        suffix = { Text("km", fontSize = 11.sp) },
+                        singleLine = true,
+                        isError = fullTankRangeInput.isNotEmpty() &&
+                            (parsedFullTankRange == null || parsedFullTankRange !in 1f..3_000f),
+                        textStyle = LocalTextStyle.current.copy(
+                            fontSize = 12.sp,
+                            color = if (isDayMode) Color(0xFF111111) else Color.White
+                        ),
+                        colors = outlinedFieldColors(accent),
+                        modifier = Modifier.width(110.dp)
+                    )
+                    if (parsedFullTankRange != null &&
+                        parsedFullTankRange in 1f..3_000f &&
+                        parsedFullTankRange != settings.fullTankRangeKm
+                    ) {
+                        IconButton(
+                            onClick = { onUpdate { copy(fullTankRangeKm = parsedFullTankRange) } },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Check, "Save full-tank range", tint = accent, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            SettingsDivider()
+
             var plateInput by remember(settings.licensePlate) { mutableStateOf(settings.licensePlate) }
             SettingsRow(
                 label = "License Plate",

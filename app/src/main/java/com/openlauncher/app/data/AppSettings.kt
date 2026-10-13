@@ -170,6 +170,7 @@ data class AppSettings(
     val vehicleName: String = "MY CAR",
     val showVehicleNameInStatusBar: Boolean = true,
     val drivingAnimationEnabled: Boolean = true,
+    val fullTankRangeKm: Float = 700f,
     val licensePlate: String = "",
     val licensePlateRegion: LicensePlateRegion = LicensePlateRegion.ALBERTA,
     val licensePlateTextColor: Int = Color(0xFF101216).toArgb(),

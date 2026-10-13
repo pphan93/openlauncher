@@ -202,6 +202,7 @@ fun AutomotiveDashboardScreen(
                 bearing = bearing,
                 vehicleData = vehicleData,
                 drivingAnimationEnabled = settings.drivingAnimationEnabled,
+                fullTankRangeKm = settings.fullTankRangeKm,
                 metric = settings.unitSystem.name == "METRIC",
                 isDayMode = isDayMode,
                 themePrimary = primary,
@@ -934,6 +935,7 @@ private fun VehicleStatusCard(
     bearing: Float,
     vehicleData: VehicleData,
     drivingAnimationEnabled: Boolean,
+    fullTankRangeKm: Float,
     metric: Boolean,
     isDayMode: Boolean,
     themePrimary: Color,
@@ -944,7 +946,11 @@ private fun VehicleStatusCard(
     val speed = ((location?.speedMps ?: 0f) * if (metric) 3.6f else 2.23694f).coerceAtLeast(0f)
     val speedUnit = if (metric) "km/h" else "mph"
     val rangeUnit = if (metric) "km" else "mi"
-    val fuelPercent = vehicleData.fuelPercent?.coerceIn(0f, 100f)
+    val fuelPercent = (
+        vehicleData.fuelPercent ?: vehicleData.rangeKm?.let { rangeKm ->
+            rangeKm / fullTankRangeKm * 100f
+        }
+    )?.coerceIn(0f, 100f)
     val displayedRange = vehicleData.rangeKm?.let { if (metric) it else it * 0.621371f }
     val doorStatus = vehicleData.doors?.let { if (it.anyOpen) "OPEN" else "CLOSED" } ?: "NO DATA"
     val doorIcon = if (vehicleData.doors?.anyOpen == true) PhIcons.Regular.LockOpen else PhIcons.Regular.Lock

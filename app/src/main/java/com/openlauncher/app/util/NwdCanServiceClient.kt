@@ -72,6 +72,8 @@ internal class NwdCanServiceClient(
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             if (!started || service == null) return
             remote = service
+            runCatching { initializeThirdPartySdk(service) }
+                .onFailure { Log.w(TAG, "Unable to initialize NWD third-party SDK", it) }
             val registeredCallbacks = listOf(
                 "climate" to FEATURE_ADD_AIR_CALLBACK,
                 "door" to FEATURE_ADD_DOOR_CALLBACK,
@@ -82,8 +84,6 @@ internal class NwdCanServiceClient(
                     .onFailure { Log.w(TAG, "Unable to register NWD $label callback", it) }
                     .isSuccess
             }
-            runCatching { initializeThirdPartySdk(service) }
-                .onFailure { Log.w(TAG, "Unable to initialize NWD third-party SDK", it) }
             if (registeredCallbacks > 0) {
                 Log.i(TAG, "Connected to NWD CAN service")
             } else {
