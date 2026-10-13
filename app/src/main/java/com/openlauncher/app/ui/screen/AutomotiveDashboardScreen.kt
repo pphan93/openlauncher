@@ -45,11 +45,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -70,8 +67,6 @@ import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.ui.theme.toFontFamily
 import com.openlauncher.app.util.LocationData
-import com.openlauncher.app.util.WazeFreeformLauncher
-import com.openlauncher.app.util.WazeLaunchResult
 import com.phosphor.icons.PhIcons
 import com.phosphor.icons.regular.*
 import kotlinx.coroutines.delay
@@ -120,29 +115,6 @@ fun AutomotiveDashboardScreen(
     val visibleCard = cardColor.copy(alpha = cardColor.alpha * cardAlpha)
     val dashboardAccent = Color(settings.dashboardAccentColor)
     val dashboardAccentContent = if (dashboardAccent.luminance() > 0.42f) Color.Black else Color.White
-    val centerPagerState = rememberPagerState(pageCount = { 2 })
-    val density = LocalDensity.current
-    val context = LocalContext.current
-    var wazeBounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
-    var wazeLaunchResult by remember { mutableStateOf<WazeLaunchResult?>(null) }
-    var launchedForCurrentVisit by remember { mutableStateOf(false) }
-
-    LaunchedEffect(
-        centerPagerState.currentPage,
-        centerPagerState.isScrollInProgress,
-        wazeBounds
-    ) {
-        if (centerPagerState.currentPage == 0) {
-            launchedForCurrentVisit = false
-            wazeLaunchResult = null
-        } else if (!centerPagerState.isScrollInProgress && !launchedForCurrentVisit) {
-            wazeBounds?.let { bounds ->
-                launchedForCurrentVisit = true
-                wazeLaunchResult = WazeFreeformLauncher.launch(context, bounds)
-            }
-        }
-    }
-
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = settings.appFont.toFontFamily()),
         LocalDashboardAccent provides dashboardAccent,
@@ -201,57 +173,25 @@ fun AutomotiveDashboardScreen(
                 )
             }
 
-            HorizontalPager(
-                state = centerPagerState,
+            Column(
                 modifier = Modifier
                     .weight(1.72f)
-                    .fillMaxHeight()
-                    .onGloballyPositioned { coordinates ->
-                        val area = coordinates.boundsInWindow()
-                        val margin = with(density) { 6.dp.toPx() }
-                        wazeBounds = android.graphics.Rect(
-                            (area.left + margin).roundToInt(),
-                            (area.top + margin).roundToInt(),
-                            (area.right - margin).roundToInt(),
-                            (area.bottom - margin).roundToInt()
-                        )
-                    },
-                beyondViewportPageCount = 0,
-                key = { it }
-            ) { page ->
-                if (page == 0) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        PhotoCarouselCard(
-                            photoUris = settings.dashboardPhotoUris,
-                            cardColor = visibleCard,
-                            primary = primary,
-                            secondary = secondary,
-                            modifier = Modifier.weight(1f).fillMaxWidth()
-                        )
-                        DashboardCalendarCard(
-                            cardColor = visibleCard,
-                            primary = primary,
-                            secondary = secondary,
-                            modifier = Modifier.fillMaxWidth().height(84.dp)
-                        )
-                    }
-                } else {
-                    WazeFreeformCard(
-                        launchResult = wazeLaunchResult,
-                        cardColor = visibleCard,
-                        primary = primary,
-                        secondary = secondary,
-                        onRetry = {
-                            wazeBounds?.let { bounds ->
-                                wazeLaunchResult = WazeFreeformLauncher.launch(context, bounds)
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PhotoCarouselCard(
+                    photoUris = settings.dashboardPhotoUris,
+                    cardColor = visibleCard,
+                    primary = primary,
+                    secondary = secondary,
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                )
+                DashboardCalendarCard(
+                    cardColor = visibleCard,
+                    primary = primary,
+                    secondary = secondary,
+                    modifier = Modifier.fillMaxWidth().height(84.dp)
+                )
             }
 
             VehicleStatusCard(
@@ -731,56 +671,6 @@ private fun ClimateStatus(icon: ImageVector, label: String, value: String, prima
         Icon(icon, null, tint = secondary, modifier = Modifier.size(16.dp))
         Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Text(label, color = secondary, fontSize = 6.sp)
-    }
-}
-
-@Composable
-private fun WazeFreeformCard(
-    launchResult: WazeLaunchResult?,
-    cardColor: Color,
-    primary: Color,
-    secondary: Color,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val dashboardAccent = LocalDashboardAccent.current
-    val message = when (launchResult) {
-        WazeLaunchResult.REQUESTED -> "Waze requested in the dashboard window"
-        WazeLaunchResult.NOT_INSTALLED -> "Waze is not installed"
-        WazeLaunchResult.FAILED -> "The head unit could not open Waze"
-        null -> "Opening Waze…"
-    }
-
-    Column(
-        modifier = modifier
-            .clip(DashboardRadius)
-            .background(cardColor)
-            .clickable(onClick = onRetry)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            PhIcons.Regular.NavigationArrow,
-            contentDescription = null,
-            tint = dashboardAccent,
-            modifier = Modifier.size(44.dp)
-        )
-        Spacer(Modifier.height(10.dp))
-        Text("WAZE", color = primary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(message, color = secondary, fontSize = 9.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (launchResult == WazeLaunchResult.REQUESTED) {
-                "Tap to reopen • swipe right to return"
-            } else {
-                "Tap to retry • swipe right to return"
-            },
-            color = secondary.copy(alpha = 0.8f),
-            fontSize = 7.sp,
-            textAlign = TextAlign.Center
-        )
     }
 }
 

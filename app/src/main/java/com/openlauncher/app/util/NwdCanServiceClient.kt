@@ -17,8 +17,8 @@ import com.openlauncher.app.model.VehicleDoorState
  * Small, dependency-free client for the public-facing service shipped by com.nwd.can.setting.
  *
  * The NWD SDK classes are deliberately not copied into Open Launcher. The service's AIDL wire
- * contract is stable enough to use through Binder directly, and its legacy car-info callback
- * returns a documented byte packet instead of a vendor Parcelable.
+ * contract is stable enough to use through Binder directly. NWD's own client registers both its
+ * legacy byte-packet car callback and its newer car-info callback, so this client does the same.
  */
 internal class NwdCanServiceClient(
     context: Context,
@@ -72,18 +72,22 @@ internal class NwdCanServiceClient(
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             if (!started || service == null) return
             remote = service
-            runCatching {
-                // Do not add the "new car info" callback (transaction 27). Its presence makes
-                // this firmware switch transaction 17 from the byte protocol to a private
-                // Parcelable. Door and legacy car-info callbacks both use transaction 1.
-                registerCallback(service, FEATURE_ADD_DOOR_CALLBACK)
-                registerCallback(service, FEATURE_ADD_CAR_INFO_CALLBACK)
-                registerCallback(service, FEATURE_ADD_AIR_CALLBACK)
-                initializeThirdPartySdk(service)
-            }.onSuccess {
+            val registeredCallbacks = listOf(
+                "climate" to FEATURE_ADD_AIR_CALLBACK,
+                "door" to FEATURE_ADD_DOOR_CALLBACK,
+                "legacy car info" to FEATURE_ADD_CAR_INFO_CALLBACK,
+                "car info" to FEATURE_ADD_CAN_CAR_INFO_CALLBACK
+            ).count { (label, transaction) ->
+                runCatching { registerCallback(service, transaction) }
+                    .onFailure { Log.w(TAG, "Unable to register NWD $label callback", it) }
+                    .isSuccess
+            }
+            runCatching { initializeThirdPartySdk(service) }
+                .onFailure { Log.w(TAG, "Unable to initialize NWD third-party SDK", it) }
+            if (registeredCallbacks > 0) {
                 Log.i(TAG, "Connected to NWD CAN service")
-            }.onFailure {
-                Log.w(TAG, "Unable to register NWD CAN callbacks", it)
+            } else {
+                Log.w(TAG, "Connected to NWD CAN service, but no callbacks were registered")
             }
         }
 
@@ -119,9 +123,14 @@ internal class NwdCanServiceClient(
         if (!started) return
         started = false
         remote?.let { service ->
-            runCatching { registerCallback(service, FEATURE_REMOVE_DOOR_CALLBACK) }
-            runCatching { registerCallback(service, FEATURE_REMOVE_CAR_INFO_CALLBACK) }
-            runCatching { registerCallback(service, FEATURE_REMOVE_AIR_CALLBACK) }
+            listOf(
+                FEATURE_REMOVE_AIR_CALLBACK,
+                FEATURE_REMOVE_DOOR_CALLBACK,
+                FEATURE_REMOVE_CAR_INFO_CALLBACK,
+                FEATURE_REMOVE_CAN_CAR_INFO_CALLBACK
+            ).forEach { transaction ->
+                runCatching { registerCallback(service, transaction) }
+            }
         }
         remote = null
         if (bound) runCatching { appContext.unbindService(connection) }
@@ -307,6 +316,8 @@ internal class NwdCanServiceClient(
         const val FEATURE_REMOVE_DOOR_CALLBACK = 12
         const val FEATURE_ADD_CAR_INFO_CALLBACK = 17
         const val FEATURE_REMOVE_CAR_INFO_CALLBACK = 18
+        const val FEATURE_ADD_CAN_CAR_INFO_CALLBACK = 27
+        const val FEATURE_REMOVE_CAN_CAR_INFO_CALLBACK = 28
         const val CALLBACK_CAN_DATA = 1
         const val CALLBACK_CAR_INFO = 2
 
