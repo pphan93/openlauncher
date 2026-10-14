@@ -25,6 +25,10 @@ class MediaListenerService : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         isConnected.value = true
+        runCatching { activeNotifications }
+            .getOrNull()
+            ?.filter { it.packageName == WazeNavigationFeed.WAZE_PACKAGE }
+            ?.forEach(WazeNavigationFeed::onNotificationPosted)
         refreshNowPlaying()
     }
 
@@ -32,12 +36,20 @@ class MediaListenerService : NotificationListenerService() {
         super.onListenerDisconnected()
         instance = null
         isConnected.value = false
+        WazeNavigationFeed.clear()
         clearController()
         _nowPlaying.value = null
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?)  { refreshNowPlaying() }
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) { refreshNowPlaying() }
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        sbn?.let(WazeNavigationFeed::onNotificationPosted)
+        refreshNowPlaying()
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        sbn?.let(WazeNavigationFeed::onNotificationRemoved)
+        refreshNowPlaying()
+    }
 
     override fun onDestroy() {
         instance = null

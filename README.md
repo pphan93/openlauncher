@@ -43,6 +43,7 @@ Open Launcher provides a clean, touch-friendly dashboard for Android head units.
 - Searchable six-column app library with Essentials and All Apps views.
 - Includes launchable apps and vendor/system apps that many launchers hide.
 - Configurable navigation bar with custom app assignments and icons.
+- Waze next-turn banner on the dashboard using an optional Waze-only accessibility service.
 - Bottom or left-side navigation placement with adjustable size.
 - Dedicated CarPlay, Android Auto, and radio app assignments. Open Launcher launches your existing receiver apps; it does not provide those services itself.
 
@@ -98,6 +99,7 @@ Upgrading over an existing installation preserves settings when the APK is signe
 | --- | --- |
 | Location | GPS speed, compass calibration support, weather location, and automatic day/night mode. |
 | Notification access | Reading and controlling the active media session for Now Playing. |
+| Accessibility (optional) | Reading Waze's visible guidance banner to show its next turn after returning to Open Launcher. The service is restricted to the Waze package. |
 | Calendar | Displaying upcoming events on the dashboard. |
 | Nearby devices / Bluetooth | Matching a connected phone to a driver profile photo. |
 | Photos and files | Selecting wallpapers, dashboard photos, and profile images. |
