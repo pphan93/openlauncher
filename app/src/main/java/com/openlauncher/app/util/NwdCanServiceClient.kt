@@ -185,6 +185,7 @@ internal class NwdCanServiceClient(
             PACKET_AIR_INFO -> handleAirPacket(packet)
 
             PACKET_DOOR_INFO -> {
+                if (packet.size < DOOR_INFO_MIN_SIZE) return
                 val bits = packet[3].toInt() and 0xFF
                 onVehicleUpdate(
                     null,
@@ -202,8 +203,7 @@ internal class NwdCanServiceClient(
             }
 
             PACKET_CAR_INFO -> {
-                val payloadLength = packet[2].toInt() and 0xFF
-                if (payloadLength < CAR_INFO_REQUIRED_LENGTH) return
+                if (packet.size < CAR_INFO_MIN_SIZE) return
                 val rawRange = ((packet[10].toInt() and 0xFF) shl 8) or
                     (packet[11].toInt() and 0xFF)
                 val rawFuel = packet[17].toInt() and 0xFF
@@ -258,8 +258,7 @@ internal class NwdCanServiceClient(
     }
 
     private fun handleAirPacket(packet: ByteArray) {
-        val payloadLength = packet[2].toInt() and 0xFF
-        if (payloadLength < AIR_INFO_REQUIRED_LENGTH) return
+        if (packet.size < AIR_INFO_MIN_SIZE) return
 
         val primaryFlags = packet[3].toInt() and 0xFF
         val secondaryFlags = packet[4].toInt() and 0xFF
@@ -293,6 +292,7 @@ internal class NwdCanServiceClient(
                 rearDefrostOn = secondaryFlags and 0x40 != 0
             )
         )
+        Log.d(TAG, "Decoded NWD climate packet: fan=${fanAndMode and 0x0F} driver=${driverTemperature.state}")
     }
 
     private fun decodeTemperature(raw: Int, fahrenheit: Boolean): DecodedTemperature = when (raw) {
@@ -339,13 +339,12 @@ internal class NwdCanServiceClient(
     )
 
     private fun isValidPacket(packet: ByteArray): Boolean {
-        if (packet.size < MIN_PACKET_SIZE || (packet[0].toInt() and 0xFF) != PACKET_HEADER) {
-            return false
-        }
-        val payloadLength = packet[2].toInt() and 0xFF
-        val packetLength = payloadLength + PACKET_OVERHEAD
-        return packetLength <= packet.size &&
-            (packet[packetLength - 1].toInt() and 0xFF) == PACKET_TRAILER
+        // NWD firmware revisions disagree about whether byte 2 is a payload length and whether
+        // the final byte is a 0xFF trailer. The G5/S212851 sends valid 19-byte climate updates
+        // with climate data in the final byte, so validate the stable header here and let each
+        // packet decoder enforce the exact minimum size it reads.
+        return packet.size >= MIN_PACKET_SIZE &&
+            (packet[0].toInt() and 0xFF) == PACKET_HEADER
     }
 
     private companion object {
@@ -372,14 +371,13 @@ internal class NwdCanServiceClient(
         const val THIRD_PARTY_KEY = "d39df3d908cf7136227987e37d5b2c7d"
 
         const val PACKET_HEADER = 0x6E
-        const val PACKET_TRAILER = 0xFF
-        const val PACKET_OVERHEAD = 4
         const val MIN_PACKET_SIZE = 5
         const val PACKET_AIR_INFO = 1
         const val PACKET_CAR_INFO = 2
         const val PACKET_DOOR_INFO = 3
-        const val AIR_INFO_REQUIRED_LENGTH = 15
-        const val CAR_INFO_REQUIRED_LENGTH = 15
+        const val AIR_INFO_MIN_SIZE = 19
+        const val CAR_INFO_MIN_SIZE = 18
+        const val DOOR_INFO_MIN_SIZE = 4
         const val TEMPERATURE_LOW = 0x00
         const val TEMPERATURE_HIGH = 0xFF
         const val TEMPERATURE_UNKNOWN = 0xFE
