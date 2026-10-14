@@ -1,11 +1,9 @@
 package com.openlauncher.app.util
 
-import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
@@ -110,17 +108,6 @@ class VehicleDataManager(context: Context) {
     }
 
     private fun registerQfVehicleShare() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            appContext.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            Log.i(
-                TAG,
-                "QF climate sharing needs WRITE_SECURE_SETTINGS; NWD service callbacks remain enabled"
-            )
-            return
-        }
-
         runCatching {
             val packageName = appContext.packageName
             val packages = Settings.Global.getString(appContext.contentResolver, QF_ALL_PACKAGES_KEY)
@@ -138,6 +125,13 @@ class VehicleDataManager(context: Context) {
             QF_SHARE_SETTING_SUFFIXES.forEach { suffix ->
                 Settings.Global.putInt(appContext.contentResolver, packageName + suffix, 1)
             }
+            val registeredPackages = Settings.Global.getString(
+                appContext.contentResolver,
+                QF_ALL_PACKAGES_KEY
+            ).orEmpty().split(',').map(String::trim)
+            check(packageName in registeredPackages && QF_SHARE_SETTING_SUFFIXES.all { suffix ->
+                Settings.Global.getInt(appContext.contentResolver, packageName + suffix, 0) == 1
+            }) { "QF vehicle-sharing settings did not persist" }
         }.onSuccess {
             Log.i(TAG, "Registered Open Launcher for QF vehicle and climate sharing")
         }.onFailure {
@@ -147,17 +141,32 @@ class VehicleDataManager(context: Context) {
 
     /** Decode the native vehicle packets shared by NWD/QF firmware with launcher apps. */
     private fun readQfSharedData(intent: Intent) {
-        val packet = intent.getByteArrayExtra(EXTRA_QF_DATA_SHARE) ?: return
-        if (packet.size < 2 || (packet[0].toInt() and 0xFF) != QF_SHARE_HEADER) return
+        val packet = intent.getByteArrayExtra(EXTRA_QF_DATA_SHARE)
+            ?: intent.extras?.let(::flattenExtras)?.entries?.firstNotNullOfOrNull { (key, value) ->
+                valueAsBytePayload(key, value)
+            }
+            ?: return
+        decodeQfSharedPacket(packet)
+    }
 
-        when (packet[1].toInt() and 0xFF) {
+    private fun decodeQfSharedPacket(packet: ByteArray): Boolean {
+        if (packet.size < 2 || (packet[0].toInt() and 0xFF) != QF_SHARE_HEADER) return false
+        Log.d(
+            TAG,
+            "QF shared packet type=0x%02X size=%d".format(packet[1].toInt() and 0xFF, packet.size)
+        )
+
+        return when (packet[1].toInt() and 0xFF) {
             QF_SHARE_CLIMATE -> decodeQfClimate(packet)?.let { climate ->
                 update(climate = climate, source = "NWD/QF vehicle share")
                 Log.d(TAG, "Vehicle climate update from NWD/QF data share: $climate")
-            }
+                true
+            } ?: false
             QF_SHARE_BODY -> decodeQfRangeKm(packet)?.let { rangeKm ->
                 update(rangeKm = rangeKm, source = "NWD/QF vehicle share")
-            }
+                true
+            } ?: false
+            else -> false
         }
     }
 
@@ -225,23 +234,63 @@ class VehicleDataManager(context: Context) {
         val range = findNumber(flattened, normalized, RANGE_KM_KEYS)
             ?.toFloat()?.takeIf { it in 0f..3_000f }
         val doors = readDoorState(flattened, normalized)
+        val climate = readClimateState(flattened, normalized)
 
-        if (fuel != null || range != null || doors != null) {
+        if (fuel != null || range != null || doors != null || climate != null) {
             update(
                 fuelPercent = fuel,
                 rangeKm = range,
                 doors = doors,
+                climate = climate,
                 source = source ?: intent.action ?: "Vehicle broadcast"
             )
-            Log.d(TAG, "Vehicle update from ${intent.action}: fuel=$fuel range=$range doors=$doors")
+            Log.d(TAG, "Vehicle update from ${intent.action}: fuel=$fuel range=$range doors=$doors climate=$climate")
         } else if (diagnostic || intent.action?.contains("nwd", ignoreCase = true) == true) {
             Log.i(TAG, "Unmapped NWD payload ${intent.action}: ${describeExtras(flattened)}")
         }
 
         for ((key, value) in flattened) {
-            valueAsBytePayload(key, value)?.let(::decodeRaiseFrames)
+            valueAsBytePayload(key, value)?.let { packet ->
+                if (!decodeQfSharedPacket(packet)) decodeRaiseFrames(packet)
+            }
         }
-        return fuel != null || range != null || doors != null
+        return fuel != null || range != null || doors != null || climate != null
+    }
+
+    private fun readClimateState(
+        values: Map<String, Any?>,
+        keys: Map<String, String>
+    ): VehicleClimateState? {
+        val fan = findNumber(values, keys, CLIMATE_FAN_KEYS)?.toInt()
+        val driverTemp = findNumber(values, keys, CLIMATE_DRIVER_TEMP_KEYS)?.toFloat()
+        val passengerTemp = findNumber(values, keys, CLIMATE_PASSENGER_TEMP_KEYS)?.toFloat()
+        val ac = findBoolean(values, keys, CLIMATE_AC_KEYS)
+        val automatic = findBoolean(values, keys, CLIMATE_AUTO_KEYS)
+        if (fan == null && driverTemp == null && passengerTemp == null && ac == null && automatic == null) {
+            return null
+        }
+        return VehicleClimateState(
+            acOn = ac == true,
+            automatic = automatic == true,
+            fanLevel = fan?.coerceIn(0, 15) ?: 0,
+            driverTemperatureCelsius = driverTemp,
+            driverTemperatureState = if (driverTemp != null) {
+                ClimateTemperatureState.VALUE
+            } else ClimateTemperatureState.UNKNOWN,
+            passengerTemperatureCelsius = passengerTemp,
+            passengerTemperatureState = if (passengerTemp != null) {
+                ClimateTemperatureState.VALUE
+            } else ClimateTemperatureState.UNKNOWN
+        )
+    }
+
+    private fun findBoolean(
+        values: Map<String, Any?>,
+        keys: Map<String, String>,
+        candidates: Set<String>
+    ): Boolean? {
+        val actual = matchingKey(keys, candidates) ?: return null
+        return valueAsBoolean(values[actual])
     }
 
     /**
@@ -686,6 +735,19 @@ class VehicleDataManager(context: Context) {
             "range", "remainingrange", "distancetoempty", "cruisingrange", "endurance",
             "endurancemileage", "remainmileage", "surplusmileage"
         )
+        private val CLIMATE_FAN_KEYS = setOf(
+            "fanlevel", "fanspeed", "airfanlevel", "acfanlevel", "blowerspeed"
+        )
+        private val CLIMATE_DRIVER_TEMP_KEYS = setOf(
+            "drivertemperaturecelsius", "drivertemperature", "lefttemperaturecelsius",
+            "lefttemperature", "lefttemp", "drivertemp"
+        )
+        private val CLIMATE_PASSENGER_TEMP_KEYS = setOf(
+            "passengertemperaturecelsius", "passengertemperature", "righttemperaturecelsius",
+            "righttemperature", "righttemp", "passengertemp"
+        )
+        private val CLIMATE_AC_KEYS = setOf("acon", "acstate", "airconditioneron", "airconditioner")
+        private val CLIMATE_AUTO_KEYS = setOf("acauto", "automode", "climateauto", "automatic")
         private val DOOR_MASK_KEYS = setOf(
             "doormask", "doorstate", "doorstatus", "cardoor", "cardoordata", "doors"
         )

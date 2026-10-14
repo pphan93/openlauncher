@@ -165,6 +165,18 @@ internal class NwdCanServiceClient(
     }
 
     private fun handlePacket(packet: ByteArray) {
+        Log.d(
+            TAG,
+            "CAN callback packet header=0x%02X type=0x%02X size=%d".format(
+                packet.getOrNull(0)?.toInt()?.and(0xFF) ?: -1,
+                packet.getOrNull(1)?.toInt()?.and(0xFF) ?: -1,
+                packet.size
+            )
+        )
+        if (isQfSharedPacket(packet)) {
+            handleQfSharedPacket(packet)
+            return
+        }
         if (!isValidPacket(packet)) {
             Log.w(TAG, "Ignored malformed NWD CAN packet (${packet.size} bytes)")
             return
@@ -208,6 +220,41 @@ internal class NwdCanServiceClient(
                 }
             }
         }
+    }
+
+    private fun isQfSharedPacket(packet: ByteArray): Boolean =
+        packet.size >= 2 && (packet[0].toInt() and 0xFF) == QF_SHARE_HEADER
+
+    private fun handleQfSharedPacket(packet: ByteArray) {
+        if ((packet[1].toInt() and 0xFF) != QF_SHARE_CLIMATE ||
+            packet.size < QF_CLIMATE_MIN_SIZE
+        ) return
+
+        val primaryFlags = packet[2].toInt() and 0xFF
+        val secondaryFlags = packet[3].toInt() and 0xFF
+        val fanAndMode = packet[4].toInt() and 0xFF
+        val driverTemperature = decodeTemperature(packet[7].toInt() and 0xFF, false)
+        val passengerTemperature = decodeTemperature(packet[8].toInt() and 0xFF, false)
+        val seatHeat = packet[10].toInt() and 0xFF
+        onVehicleUpdate(
+            null,
+            null,
+            null,
+            VehicleClimateState(
+                acOn = primaryFlags and 0x40 != 0,
+                automatic = primaryFlags and 0x24 != 0,
+                fanLevel = fanAndMode and 0x0F,
+                driverTemperatureCelsius = driverTemperature.celsius,
+                driverTemperatureState = driverTemperature.state,
+                passengerTemperatureCelsius = passengerTemperature.celsius,
+                passengerTemperatureState = passengerTemperature.state,
+                driverSeatHeatLevel = (seatHeat ushr 4) and 0x0F,
+                passengerSeatHeatLevel = seatHeat and 0x0F,
+                frontDefrostOn = secondaryFlags and 0x80 != 0,
+                rearDefrostOn = secondaryFlags and 0x40 != 0
+            )
+        )
+        Log.d(TAG, "Decoded native QF climate packet from NWD callback")
     }
 
     private fun handleAirPacket(packet: ByteArray) {
@@ -339,5 +386,8 @@ internal class NwdCanServiceClient(
         const val UNKNOWN_BYTE = 0xFF
         const val UNKNOWN_WORD = 0xFFFF
         const val MAX_RANGE_KM = 3_000f
+        const val QF_SHARE_HEADER = 0x2E
+        const val QF_SHARE_CLIMATE = 0x01
+        const val QF_CLIMATE_MIN_SIZE = 11
     }
 }
