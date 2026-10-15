@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -614,20 +615,15 @@ private fun DashboardWeatherClimateCard(
                 primary,
                 secondary
             )
-            ClimateStatus(
-                PhIcons.Regular.Seat,
-                "DRIVER",
-                climate?.seatDisplay(driver = true) ?: "—",
-                primary,
-                secondary
-            )
-            ClimateStatus(
-                PhIcons.Regular.Seat,
-                "PASS.",
-                climate?.seatDisplay(driver = false) ?: "—",
-                primary,
-                secondary
-            )
+            ClimateStatus("MODE", climate?.airflowDisplay() ?: "—", primary, secondary) {
+                ClimateAirflowIcon(climate, secondary)
+            }
+            ClimateStatus("DEFROST", climate?.defrostDisplay() ?: "—", primary, secondary) {
+                ClimateDefrostIcon(climate, secondary)
+            }
+            ClimateStatus("A/C", climate?.let { if (it.acOn) "ON" else "OFF" } ?: "—", primary, secondary) {
+                Text("A/C", color = secondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -654,14 +650,23 @@ private fun VehicleClimateState.driverTemperatureDisplay(metric: Boolean): Strin
         } ?: "—°"
     }
 
-private fun VehicleClimateState.seatDisplay(driver: Boolean): String {
-    val heat = if (driver) driverSeatHeatLevel else passengerSeatHeatLevel
-    val cool = if (driver) driverSeatCoolLevel else passengerSeatCoolLevel
-    return when {
-        heat > 0 -> "H$heat"
-        cool > 0 -> "C$cool"
-        else -> "OFF"
-    }
+private fun VehicleClimateState.airflowDisplay(): String = when {
+    airUp && airFace && airDown -> "ALL"
+    airUp && airFace -> "GLASS + FACE"
+    airUp && airDown -> "GLASS + FEET"
+    airFace && airDown -> "FACE + FEET"
+    airUp -> "WINDSHIELD"
+    airFace -> "FACE"
+    airDown -> "FEET"
+    fanLevel <= 0 -> "OFF"
+    else -> "—"
+}
+
+private fun VehicleClimateState.defrostDisplay(): String = when {
+    frontDefrostOn && rearDefrostOn -> "BOTH"
+    frontDefrostOn -> "FRONT"
+    rearDefrostOn -> "REAR"
+    else -> "OFF"
 }
 
 @Composable
@@ -741,10 +746,190 @@ private fun DashboardWeatherIcon(
 
 @Composable
 private fun ClimateStatus(icon: ImageVector, label: String, value: String, primary: Color, secondary: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    ClimateStatus(label, value, primary, secondary) {
         Icon(icon, null, tint = secondary, modifier = Modifier.size(16.dp))
+    }
+}
+
+@Composable
+private fun ClimateStatus(
+    label: String,
+    value: String,
+    primary: Color,
+    secondary: Color,
+    iconContent: @Composable () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(modifier = Modifier.height(16.dp), contentAlignment = Alignment.Center) {
+            iconContent()
+        }
         Text(value, color = primary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Text(label, color = secondary, fontSize = 6.sp)
+    }
+}
+
+@Composable
+private fun ClimateAirflowIcon(climate: VehicleClimateState?, tint: Color) {
+    val showFace = climate?.airFace == true
+    val showFeet = climate?.airDown == true
+    if (showFace || showFeet) {
+        val icon = when {
+            showFace && showFeet -> R.drawable.ic_climate_seat_adjustment
+            showFace -> R.drawable.ic_climate_seat_face
+            else -> R.drawable.ic_climate_seat_feet
+        }
+        Box(
+            modifier = Modifier.size(width = 25.dp, height = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = tint
+            )
+        }
+        return
+    }
+
+    Canvas(modifier = Modifier.size(width = 25.dp, height = 16.dp)) {
+        val lineWidth = 1.45.dp.toPx()
+        val lineStyle = Stroke(width = lineWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun glassAir(x: Float) {
+            val wave = Path().apply {
+                moveTo(size.width * x, size.height * 0.48f)
+                cubicTo(
+                    size.width * (x - 0.06f), size.height * 0.40f,
+                    size.width * (x + 0.07f), size.height * 0.32f,
+                    size.width * x, size.height * 0.23f
+                )
+                cubicTo(
+                    size.width * (x - 0.05f), size.height * 0.16f,
+                    size.width * (x + 0.05f), size.height * 0.10f,
+                    size.width * x, size.height * 0.04f
+                )
+            }
+            drawPath(wave, tint, style = lineStyle)
+        }
+
+        val airUp = climate?.airUp == true
+
+        // Passenger and seat silhouette follows the supplied HVAC pictograms.
+        drawCircle(
+            tint,
+            radius = size.height * 0.105f,
+            center = Offset(size.width * 0.79f, size.height * 0.13f),
+            style = lineStyle
+        )
+        val passenger = Path().apply {
+            moveTo(size.width * 0.73f, size.height * 0.31f)
+            cubicTo(
+                size.width * 0.68f, size.height * 0.43f,
+                size.width * 0.66f, size.height * 0.55f,
+                size.width * 0.70f, size.height * 0.65f
+            )
+            lineTo(size.width * 0.83f, size.height * 0.70f)
+            lineTo(size.width * 0.92f, size.height * 0.94f)
+        }
+        drawPath(passenger, tint, style = lineStyle)
+        val seat = Path().apply {
+            moveTo(size.width * 0.64f, size.height * 0.39f)
+            lineTo(size.width * 0.64f, size.height * 0.68f)
+            cubicTo(
+                size.width * 0.66f, size.height * 0.79f,
+                size.width * 0.75f, size.height * 0.80f,
+                size.width * 0.83f, size.height * 0.80f
+            )
+            lineTo(size.width * 0.94f, size.height * 0.95f)
+        }
+        drawPath(seat, tint, style = lineStyle)
+
+        if (airUp) {
+            val windshield = Path().apply {
+                moveTo(size.width * 0.07f, size.height * 0.43f)
+                lineTo(size.width * 0.14f, size.height * 0.10f)
+                quadraticTo(
+                    size.width * 0.36f, size.height * 0.01f,
+                    size.width * 0.56f, size.height * 0.11f
+                )
+                lineTo(size.width * 0.62f, size.height * 0.43f)
+            }
+            drawPath(windshield, tint, style = lineStyle)
+            glassAir(0.24f)
+            glassAir(0.38f)
+            glassAir(0.52f)
+        }
+    }
+}
+
+@Composable
+private fun ClimateDefrostIcon(climate: VehicleClimateState?, tint: Color) {
+    Canvas(modifier = Modifier.size(width = 25.dp, height = 16.dp)) {
+        val lineWidth = 1.5.dp.toPx()
+        val lineStyle = Stroke(width = lineWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun heatWave(x: Float, top: Float, bottom: Float, widthScale: Float = 1f) {
+            val bend = 0.055f * widthScale
+            val wave = Path().apply {
+                moveTo(size.width * x, size.height * bottom)
+                cubicTo(
+                    size.width * (x - bend), size.height * (bottom - 0.12f),
+                    size.width * (x + bend), size.height * (bottom - 0.22f),
+                    size.width * x, size.height * (bottom - 0.34f)
+                )
+                cubicTo(
+                    size.width * (x - bend), size.height * (bottom - 0.45f),
+                    size.width * (x + bend), size.height * (top + 0.10f),
+                    size.width * x, size.height * top
+                )
+            }
+            drawPath(wave, tint, style = lineStyle)
+        }
+        fun frontWindow(left: Float, right: Float) {
+            val window = Path().apply {
+                moveTo(size.width * left, size.height * 0.87f)
+                lineTo(size.width * (left + 0.055f), size.height * 0.28f)
+                quadraticTo(
+                    size.width * ((left + right) / 2f), size.height * 0.10f,
+                    size.width * (right - 0.055f), size.height * 0.28f
+                )
+                lineTo(size.width * right, size.height * 0.87f)
+                quadraticTo(
+                    size.width * ((left + right) / 2f), size.height * 0.96f,
+                    size.width * left, size.height * 0.87f
+                )
+            }
+            drawPath(window, tint, style = lineStyle)
+        }
+        fun rearWindow(left: Float, right: Float) {
+            val window = Path().apply {
+                moveTo(size.width * left, size.height * 0.26f)
+                lineTo(size.width * right, size.height * 0.26f)
+                lineTo(size.width * (right - 0.025f), size.height * 0.88f)
+                lineTo(size.width * (left + 0.025f), size.height * 0.88f)
+                close()
+            }
+            drawPath(window, tint, style = lineStyle)
+        }
+
+        val front = climate?.frontDefrostOn == true
+        val rear = climate?.rearDefrostOn == true
+        when {
+            front && rear -> {
+                frontWindow(0.02f, 0.48f)
+                rearWindow(0.55f, 0.98f)
+                listOf(0.15f, 0.28f, 0.41f, 0.65f, 0.76f, 0.87f).forEach {
+                    heatWave(it, 0.37f, 0.79f, 0.7f)
+                }
+            }
+            rear -> {
+                rearWindow(0.13f, 0.87f)
+                listOf(0.34f, 0.50f, 0.66f).forEach { heatWave(it, 0.28f, 0.79f) }
+            }
+            else -> {
+                frontWindow(0.08f, 0.92f)
+                listOf(0.32f, 0.50f, 0.68f).forEach { heatWave(it, 0.28f, 0.79f) }
+            }
+        }
     }
 }
 
