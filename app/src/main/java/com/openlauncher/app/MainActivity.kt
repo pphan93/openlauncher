@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
             val weather     by vm.weather.collectAsStateWithLifecycle()
             val weatherError by vm.weatherError.collectAsStateWithLifecycle()
             val location    by vm.location.collectAsStateWithLifecycle()
+            val gpsLocationName by vm.gpsLocationName.collectAsStateWithLifecycle()
             val bearing     by vm.compassBearing.collectAsStateWithLifecycle()
             val vehicleData by vm.vehicleData.collectAsStateWithLifecycle()
             val wazeNavigation by WazeNavigationFeed.state.collectAsStateWithLifecycle()
@@ -222,6 +223,7 @@ class MainActivity : ComponentActivity() {
                                         weatherError = weatherError,
                                         nowPlaying = nowPlaying,
                                         location = location,
+                                        gpsLocationName = gpsLocationName,
                                         bearing = bearing,
                                         vehicleData = vehicleData,
                                         wazeNavigation = wazeNavigation,

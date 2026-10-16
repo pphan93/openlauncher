@@ -180,7 +180,8 @@ class VehicleDataManager(context: Context) {
         val seatHeat = packet[10].toInt() and 0xFF
 
         return VehicleClimateState(
-            acOn = primaryFlags and 0x40 != 0,
+            // QF bit 0x40 follows HVAC/fan power; the dedicated A/C state is bit 0x80.
+            acOn = primaryFlags and 0x80 != 0,
             automatic = primaryFlags and 0x24 != 0,
             fanLevel = fanAndMode and 0x0F,
             airUp = fanAndMode and 0x80 != 0,

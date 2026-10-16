@@ -420,10 +420,23 @@ fun SettingsScreen(
                 icon = Icons.Default.Navigation,
                 accent = if (isWazeAccessibilityConnected) accent else Color(0xFF993333),
                 onClick = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val service = android.content.ComponentName(
+                        context,
+                        com.openlauncher.app.service.WazeNavigationAccessibilityService::class.java
                     )
+                    val openedDetails = runCatching {
+                        context.startActivity(
+                            Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
+                                .putExtra(Intent.EXTRA_COMPONENT_NAME, service)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }.isSuccess
+                    if (!openedDetails) {
+                        context.startActivity(
+                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
                 }
             )
             SettingsDivider()

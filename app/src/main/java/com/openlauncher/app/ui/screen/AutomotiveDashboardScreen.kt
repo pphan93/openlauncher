@@ -98,6 +98,7 @@ fun AutomotiveDashboardScreen(
     weatherError: String?,
     nowPlaying: NowPlayingState?,
     location: LocationData?,
+    gpsLocationName: String,
     bearing: Float,
     vehicleData: VehicleData,
     wazeNavigation: WazeNavigationState,
@@ -132,6 +133,8 @@ fun AutomotiveDashboardScreen(
         ) {
         DashboardHeader(
             settings = settings,
+            hasGpsFix = location != null,
+            gpsLocationName = gpsLocationName,
             profilePhoto = profilePhoto,
             primary = primary,
             secondary = secondary
@@ -291,6 +294,8 @@ private fun WazeGuidanceBanner(
 @Composable
 private fun DashboardHeader(
     settings: AppSettings,
+    hasGpsFix: Boolean,
+    gpsLocationName: String,
     profilePhoto: DriverProfilePhoto,
     primary: Color,
     secondary: Color
@@ -305,13 +310,19 @@ private fun DashboardHeader(
     }
     val time = remember(now) { SimpleDateFormat("h:mm a", Locale.getDefault()).format(now) }
     val date = remember(now) { SimpleDateFormat("EEEE | MMMM d, yyyy", Locale.getDefault()).format(now) }
+    val locationLabel = when {
+        hasGpsFix && gpsLocationName.isNotBlank() -> gpsLocationName
+        hasGpsFix -> "Locating city…"
+        settings.manualWeatherLocationName.isNotBlank() -> settings.manualWeatherLocationName
+        else -> "Waiting for GPS"
+    }
     Box(
         modifier = Modifier.fillMaxWidth().height(48.dp),
     ) {
         Column(modifier = Modifier.align(Alignment.CenterStart)) {
             Text(time, color = primary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
-                "$date  •  ${settings.manualWeatherLocationName.ifEmpty { "Current location" }}",
+                "$date  •  $locationLabel",
                 color = secondary,
                 fontSize = 9.sp,
                 maxLines = 1
@@ -772,6 +783,35 @@ private fun ClimateStatus(
 private fun ClimateAirflowIcon(climate: VehicleClimateState?, tint: Color) {
     val showFace = climate?.airFace == true
     val showFeet = climate?.airDown == true
+    val showWindshield = climate?.airUp == true
+    if (showWindshield && showFeet) {
+        Box(
+            modifier = Modifier.size(width = 25.dp, height = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_climate_windshield_feet),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = tint
+            )
+        }
+        return
+    }
+    if (!showFace && !showFeet && !showWindshield) {
+        Box(
+            modifier = Modifier.size(width = 25.dp, height = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_climate_airflow_off),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = tint
+            )
+        }
+        return
+    }
     if (showFace || showFeet) {
         val icon = when {
             showFace && showFeet -> R.drawable.ic_climate_seat_adjustment
@@ -812,8 +852,6 @@ private fun ClimateAirflowIcon(climate: VehicleClimateState?, tint: Color) {
             drawPath(wave, tint, style = lineStyle)
         }
 
-        val airUp = climate?.airUp == true
-
         // Passenger and seat silhouette follows the supplied HVAC pictograms.
         drawCircle(
             tint,
@@ -844,7 +882,7 @@ private fun ClimateAirflowIcon(climate: VehicleClimateState?, tint: Color) {
         }
         drawPath(seat, tint, style = lineStyle)
 
-        if (airUp) {
+        if (showWindshield) {
             val windshield = Path().apply {
                 moveTo(size.width * 0.07f, size.height * 0.43f)
                 lineTo(size.width * 0.14f, size.height * 0.10f)
@@ -864,73 +902,46 @@ private fun ClimateAirflowIcon(climate: VehicleClimateState?, tint: Color) {
 
 @Composable
 private fun ClimateDefrostIcon(climate: VehicleClimateState?, tint: Color) {
-    Canvas(modifier = Modifier.size(width = 25.dp, height = 16.dp)) {
-        val lineWidth = 1.5.dp.toPx()
-        val lineStyle = Stroke(width = lineWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        fun heatWave(x: Float, top: Float, bottom: Float, widthScale: Float = 1f) {
-            val bend = 0.055f * widthScale
-            val wave = Path().apply {
-                moveTo(size.width * x, size.height * bottom)
-                cubicTo(
-                    size.width * (x - bend), size.height * (bottom - 0.12f),
-                    size.width * (x + bend), size.height * (bottom - 0.22f),
-                    size.width * x, size.height * (bottom - 0.34f)
-                )
-                cubicTo(
-                    size.width * (x - bend), size.height * (bottom - 0.45f),
-                    size.width * (x + bend), size.height * (top + 0.10f),
-                    size.width * x, size.height * top
-                )
-            }
-            drawPath(wave, tint, style = lineStyle)
-        }
-        fun frontWindow(left: Float, right: Float) {
-            val window = Path().apply {
-                moveTo(size.width * left, size.height * 0.87f)
-                lineTo(size.width * (left + 0.055f), size.height * 0.28f)
-                quadraticTo(
-                    size.width * ((left + right) / 2f), size.height * 0.10f,
-                    size.width * (right - 0.055f), size.height * 0.28f
-                )
-                lineTo(size.width * right, size.height * 0.87f)
-                quadraticTo(
-                    size.width * ((left + right) / 2f), size.height * 0.96f,
-                    size.width * left, size.height * 0.87f
-                )
-            }
-            drawPath(window, tint, style = lineStyle)
-        }
-        fun rearWindow(left: Float, right: Float) {
-            val window = Path().apply {
-                moveTo(size.width * left, size.height * 0.26f)
-                lineTo(size.width * right, size.height * 0.26f)
-                lineTo(size.width * (right - 0.025f), size.height * 0.88f)
-                lineTo(size.width * (left + 0.025f), size.height * 0.88f)
-                close()
-            }
-            drawPath(window, tint, style = lineStyle)
-        }
+    val front = climate?.frontDefrostOn == true
+    val rear = climate?.rearDefrostOn == true
 
-        val front = climate?.frontDefrostOn == true
-        val rear = climate?.rearDefrostOn == true
-        when {
-            front && rear -> {
-                frontWindow(0.02f, 0.48f)
-                rearWindow(0.55f, 0.98f)
-                listOf(0.15f, 0.28f, 0.41f, 0.65f, 0.76f, 0.87f).forEach {
-                    heatWave(it, 0.37f, 0.79f, 0.7f)
-                }
-            }
-            rear -> {
-                rearWindow(0.13f, 0.87f)
-                listOf(0.34f, 0.50f, 0.66f).forEach { heatWave(it, 0.28f, 0.79f) }
-            }
-            else -> {
-                frontWindow(0.08f, 0.92f)
-                listOf(0.32f, 0.50f, 0.68f).forEach { heatWave(it, 0.28f, 0.79f) }
-            }
+    if (front && rear) {
+        Row(
+            modifier = Modifier.size(width = 25.dp, height = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_climate_defrost_front),
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = tint
+            )
+            Spacer(Modifier.width(1.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_climate_defrost_rear),
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = tint
+            )
         }
+        return
     }
+    if (rear && !front) {
+        Icon(
+            painter = painterResource(R.drawable.ic_climate_defrost_rear),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = tint
+        )
+        return
+    }
+    Icon(
+        painter = painterResource(R.drawable.ic_climate_defrost_front),
+        contentDescription = null,
+        modifier = Modifier.size(16.dp),
+        tint = tint
+    )
 }
 
 @Composable

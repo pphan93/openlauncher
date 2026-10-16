@@ -1,7 +1,9 @@
 package com.openlauncher.app.service
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
 import android.graphics.Rect
+import android.os.Bundle
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -13,10 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Reads Waze's visible guidance banner because its ongoing notification does not expose the
- * next turn on this head unit. The accessibility configuration restricts events to Waze only.
- * This follows the screen-reading approach demonstrated by the GPL-licensed Dashwheel project,
- * with an implementation specific to Open Launcher's much smaller navigation model.
+ * Reads Waze's visible guidance banner when its notification does not expose the next turn.
+ * Notification text is preferred by [WazeNavigationFeed], while this Waze-only accessibility
+ * service provides the fallback used by head-unit builds with generic navigation notifications.
  */
 class WazeNavigationAccessibilityService : AccessibilityService() {
 
@@ -28,7 +29,7 @@ class WazeNavigationAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         if (event.packageName?.toString() != WazeNavigationFeed.WAZE_PACKAGE) return
-        WazeNavigationFeed.readScreen(event)
+        WazeNavigationFeed.readScreen(event, rootInActiveWindow)
     }
 
     override fun onInterrupt() = Unit
@@ -61,9 +62,20 @@ object WazeNavigationFeed {
     @Volatile private var runningNotificationKey: String? = null
 
     fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName == WAZE_PACKAGE && sbn.isOngoing) {
+        if (sbn.packageName != WAZE_PACKAGE) return
+
+        parseNotification(sbn)?.let { parsed ->
             runningNotificationKey = sbn.key
+            if (parsed != _state.value) {
+                _state.value = parsed
+                Log.i(TAG, "Waze notification turn: ${parsed.distance} ${parsed.instruction} (${parsed.eta})")
+            }
+            return
         }
+
+        // Some Waze builds expose only a generic ongoing notification. Keep its key so removing
+        // it still clears guidance captured from the accessibility fallback when the route ends.
+        if (sbn.isOngoing) runningNotificationKey = sbn.key
     }
 
     fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -78,14 +90,19 @@ object WazeNavigationFeed {
         _state.value = WazeNavigationState()
     }
 
-    internal fun readScreen(event: AccessibilityEvent) {
+    internal fun readScreen(
+        event: AccessibilityEvent,
+        activeWindowRoot: AccessibilityNodeInfo? = null
+    ) {
         val now = SystemClock.elapsedRealtime()
         if (now - lastReadAt < READ_INTERVAL_MS) return
-        lastReadAt = now
 
-        val root = runCatching { event.source?.let(::rootOf) }.getOrNull() ?: return
+        val root = runCatching {
+            event.source?.let(::rootOf) ?: activeWindowRoot
+        }.getOrNull() ?: return
         val bounds = Rect().also(root::getBoundsInScreen)
         if (bounds.height() <= 0) return
+        lastReadAt = now
 
         val pieces = ArrayList<ScreenPiece>()
         runCatching { collectVisibleText(root, pieces, depth = 0) }
@@ -95,6 +112,63 @@ object WazeNavigationFeed {
             _state.value = parsed
             Log.i(TAG, "Waze turn: ${parsed.distance} ${parsed.instruction} (${parsed.eta})")
         }
+    }
+
+    private fun parseNotification(sbn: StatusBarNotification): WazeNavigationState? {
+        val pieces = ArrayList<String>()
+        val extras = sbn.notification.extras
+        STANDARD_NOTIFICATION_KEYS.forEach { key ->
+            collectNotificationText(extras.get(key), pieces, depth = 0)
+        }
+
+        // Android Auto / AndroidX Car App notifications can keep display strings in nested
+        // extension bundles rather than the standard title/text fields.
+        extras.keySet()
+            .filterNot { it in STANDARD_NOTIFICATION_KEYS }
+            .forEach { key -> collectNotificationText(extras.get(key), pieces, depth = 0) }
+
+        val lines = pieces
+            .flatMap { it.split(NOTIFICATION_SEPARATOR) }
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+
+        val distanceSource = lines.firstOrNull(DISTANCE::containsMatchIn) ?: return null
+        val distance = DISTANCE.find(distanceSource)?.value ?: return null
+        val inlineInstruction = distanceSource
+            .replaceFirst(DISTANCE, "")
+            .trim(' ', '-', ':', '\u2022', '\u00B7', '\u2013', '\u2014')
+            .takeIf(::isInstructionText)
+        val instruction = inlineInstruction ?: lines.firstOrNull(::isInstructionText) ?: "Continue"
+        val eta = lines
+            .filter { it != distanceSource && (DURATION.containsMatchIn(it) || CLOCK.containsMatchIn(it)) }
+            .distinct()
+            .joinToString(" \u00B7 ")
+
+        return WazeNavigationState(
+            active = true,
+            instruction = instruction,
+            distance = distance,
+            eta = eta
+        )
+    }
+
+    private fun collectNotificationText(value: Any?, destination: MutableList<String>, depth: Int) {
+        if (value == null || depth > 4) return
+        when (value) {
+            is CharSequence -> value.toString().trim().takeIf(String::isNotEmpty)?.let(destination::add)
+            is Array<*> -> value.forEach { collectNotificationText(it, destination, depth + 1) }
+            is Bundle -> value.keySet().forEach {
+                collectNotificationText(value.get(it), destination, depth + 1)
+            }
+        }
+    }
+
+    private fun isInstructionText(text: String): Boolean {
+        val normalized = text.trim().lowercase()
+        if (normalized in GENERIC_NOTIFICATION_TEXT || normalized in THEN_WORDS) return false
+        if (DISTANCE.containsMatchIn(text) || DURATION.containsMatchIn(text) || CLOCK.matches(text)) return false
+        return text.length >= 3
     }
 
     private fun rootOf(start: AccessibilityNodeInfo): AccessibilityNodeInfo {
@@ -129,14 +203,14 @@ object WazeNavigationFeed {
         val topLimit = screenTop + screenHeight / 4
         val top = pieces.filter { it.top < topLimit }
         val distancePiece = top.firstOrNull {
-            !it.described && DISTANCE.matches(it.text)
+            !it.described && DISTANCE.containsMatchIn(it.text)
         } ?: return null
         val street = top.firstOrNull {
-            !it.described && it !== distancePiece && !DISTANCE.matches(it.text) &&
+            !it.described && it !== distancePiece && !DISTANCE.containsMatchIn(it.text) &&
                 it.text.lowercase() !in THEN_WORDS
         }?.text
         val maneuver = top.firstOrNull {
-            it.described && !DISTANCE.matches(it.text) && it.text != street &&
+            it.described && !DISTANCE.containsMatchIn(it.text) && it.text != street &&
                 it.text.lowercase() !in THEN_WORDS
         }?.text
         val instruction = listOfNotNull(maneuver, street).distinct().joinToString(", ")
@@ -145,16 +219,16 @@ object WazeNavigationFeed {
         val bottomStart = screenTop + screenHeight * 2 / 3
         val bottom = pieces.filter { !it.described && it.top >= bottomStart }
         val tripDetails = bottom
-            .flatMap { it.text.split('•', '·') }
+            .flatMap { it.text.split('\u2022', '\u00B7') }
             .map(String::trim)
-            .filter { DURATION.containsMatchIn(it) || DISTANCE.matches(it) }
+            .filter { DURATION.containsMatchIn(it) || DISTANCE.containsMatchIn(it) }
         val arrival = bottom.firstOrNull { CLOCK.matches(it.text) }?.text
 
         return WazeNavigationState(
             active = true,
             instruction = instruction,
-            distance = distancePiece.text,
-            eta = (tripDetails + listOfNotNull(arrival)).distinct().joinToString(" · ")
+            distance = DISTANCE.find(distancePiece.text)?.value ?: distancePiece.text,
+            eta = (tripDetails + listOfNotNull(arrival)).distinct().joinToString(" \u00B7 ")
         )
     }
 
@@ -167,5 +241,23 @@ object WazeNavigationFeed {
     private val DISTANCE = Regex("""\d+(?:[.,]\d+)?\s?(?:km|m|mi|ft|yd)\b""", RegexOption.IGNORE_CASE)
     private val CLOCK = Regex("""\d{1,2}[:h.]\d{2}(?:\s?[AaPp]\.?[Mm]\.?)?""")
     private val DURATION = Regex("""\b\d+\s*(?:min|h|hr)\b""", RegexOption.IGNORE_CASE)
+    private val NOTIFICATION_SEPARATOR = Regex("""[\n\r\u2022\u00B7]+""")
+    private val STANDARD_NOTIFICATION_KEYS = listOf(
+        Notification.EXTRA_TITLE,
+        Notification.EXTRA_TITLE_BIG,
+        Notification.EXTRA_TEXT,
+        Notification.EXTRA_BIG_TEXT,
+        Notification.EXTRA_SUB_TEXT,
+        Notification.EXTRA_SUMMARY_TEXT,
+        Notification.EXTRA_INFO_TEXT,
+        Notification.EXTRA_TEXT_LINES
+    )
+    private val GENERIC_NOTIFICATION_TEXT = setOf(
+        "waze",
+        "waze is running",
+        "driving with waze",
+        "tap to open waze",
+        "navigation in progress"
+    )
     private val THEN_WORDS = setOf("then", "puis", "dann", "luego", "poi", "depois", "daarna", "potem")
 }

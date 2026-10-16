@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
+import android.location.Geocoder
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -37,6 +38,7 @@ import com.openlauncher.app.util.IconPackManager
 import com.openlauncher.app.util.VehicleDataManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.util.Locale
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -331,14 +333,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _weatherError = MutableStateFlow<String?>(null)
     val weatherError: StateFlow<String?> = _weatherError
 
+    private val _gpsLocationName = MutableStateFlow("")
+    val gpsLocationName: StateFlow<String> = _gpsLocationName.asStateFlow()
+
     private val _manualWeatherLocationState = MutableStateFlow(ManualWeatherLocationState())
     val manualWeatherLocationState: StateFlow<ManualWeatherLocationState> = _manualWeatherLocationState
 
     private var weatherJob: Job? = null
 
-    fun fetchWeather(lat: Double, lon: Double, metric: Boolean) {
+    fun fetchWeather(lat: Double, lon: Double, metric: Boolean, resolveGpsCity: Boolean = false) {
         weatherJob?.cancel()
         weatherJob = viewModelScope.launch {
+            // Keep the city label on the same refresh cycle as weather instead of
+            // running a second location observer solely for reverse geocoding.
+            if (resolveGpsCity) {
+                launch {
+                    reverseGeocodeCity(lat, lon)?.let { city ->
+                        _gpsLocationName.value = city
+                    }
+                }
+            }
             try {
                 _weatherError.value = null
                 // Always request celsius — the state stores celsius and the widget
@@ -378,6 +392,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    @Suppress("DEPRECATION")
+    private suspend fun reverseGeocodeCity(latitude: Double, longitude: Double): String? =
+        withContext(Dispatchers.IO) {
+            if (!Geocoder.isPresent()) return@withContext null
+            runCatching {
+                Geocoder(getApplication(), Locale.getDefault())
+                    .getFromLocation(latitude, longitude, 1)
+                    ?.firstOrNull()
+                    ?.let { address ->
+                        address.locality
+                            ?: address.subAdminArea
+                            ?: address.adminArea
+                            ?: address.countryName
+                    }
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+            }.getOrNull()
+        }
 
     fun setManualWeatherLocation(query: String) {
         val locationQuery = query.trim()
@@ -726,7 +759,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     fetchWeather(
                         coordinates.first,
                         coordinates.second,
-                        currentSettings.unitSystem == com.openlauncher.app.data.UnitSystem.METRIC
+                        currentSettings.unitSystem == com.openlauncher.app.data.UnitSystem.METRIC,
+                        resolveGpsCity = gps != null
                     )
                 }
             }
