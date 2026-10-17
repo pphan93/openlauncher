@@ -3,6 +3,4 @@
     <string name="app_name">Open Launcher</string>
     <string name="settings_label">Open Launcher Settings</string>
     <string name="media_label">Open Launcher Media</string>
-    <string name="waze_navigation_accessibility_label">Open Launcher Waze Guidance</string>
-    <string name="waze_navigation_accessibility_description">Reads only Waze’s visible guidance banner to show the next turn on the Open Launcher dashboard.</string>
 </resources>

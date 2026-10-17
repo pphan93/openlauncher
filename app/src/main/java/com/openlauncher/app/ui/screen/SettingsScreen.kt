@@ -318,8 +318,6 @@ fun SettingsScreen(
         // ── Permissions ──────────────────────────────────────────────────────
         SettingsSection("Permissions") {
             val isMediaConnected by com.openlauncher.app.service.MediaListenerService.isConnected.collectAsState()
-            val isWazeAccessibilityConnected by
-                com.openlauncher.app.service.WazeNavigationAccessibilityService.isConnected.collectAsState()
 
             // Bumped on ON_RESUME so statuses refresh when the user returns from
             // system settings (recomposition alone doesn't re-run these checks)
@@ -407,36 +405,6 @@ fun SettingsScreen(
                         Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     )
-                }
-            )
-            SettingsDivider()
-            SettingsButton(
-                label = "Waze Turn-by-Turn",
-                sublabel = if (isWazeAccessibilityConnected) {
-                    "Enabled — next turns can appear on the dashboard"
-                } else {
-                    "Enable Open Launcher Waze Guidance in Accessibility"
-                },
-                icon = Icons.Default.Navigation,
-                accent = if (isWazeAccessibilityConnected) accent else Color(0xFF993333),
-                onClick = {
-                    val service = android.content.ComponentName(
-                        context,
-                        com.openlauncher.app.service.WazeNavigationAccessibilityService::class.java
-                    )
-                    val openedDetails = runCatching {
-                        context.startActivity(
-                            Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
-                                .putExtra(Intent.EXTRA_COMPONENT_NAME, service)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }.isSuccess
-                    if (!openedDetails) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
                 }
             )
             SettingsDivider()

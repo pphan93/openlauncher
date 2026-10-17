@@ -64,7 +64,6 @@ import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.model.VehicleData
 import com.openlauncher.app.model.ClimateTemperatureState
 import com.openlauncher.app.model.VehicleClimateState
-import com.openlauncher.app.model.WazeNavigationState
 import com.openlauncher.app.data.DriverProfilePhoto
 import com.openlauncher.app.data.LicensePlateRegion
 import com.openlauncher.app.ui.theme.toFontFamily
@@ -101,7 +100,6 @@ fun AutomotiveDashboardScreen(
     gpsLocationName: String,
     bearing: Float,
     vehicleData: VehicleData,
-    wazeNavigation: WazeNavigationState,
     profilePhoto: DriverProfilePhoto,
     isDayMode: Boolean,
     onPlayPause: () -> Unit,
@@ -109,7 +107,6 @@ fun AutomotiveDashboardScreen(
     onPrev: () -> Unit,
     onSeek: (Long) -> Unit,
     onTapNowPlaying: () -> Unit,
-    onOpenWaze: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val background = if (isDayMode) DashboardLightBackground else DashboardDarkBackground
@@ -141,18 +138,6 @@ fun AutomotiveDashboardScreen(
         )
 
         Spacer(Modifier.height(8.dp))
-
-        if (wazeNavigation.active) {
-            WazeGuidanceBanner(
-                navigation = wazeNavigation,
-                cardColor = visibleCard,
-                primary = primary,
-                secondary = secondary,
-                accent = dashboardAccent,
-                onOpen = onOpenWaze
-            )
-            Spacer(Modifier.height(8.dp))
-        }
 
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -230,64 +215,6 @@ fun AutomotiveDashboardScreen(
             )
         }
     }
-    }
-}
-
-@Composable
-private fun WazeGuidanceBanner(
-    navigation: WazeNavigationState,
-    cardColor: Color,
-    primary: Color,
-    secondary: Color,
-    accent: Color,
-    onOpen: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(66.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(cardColor)
-            .clickable(onClick = onOpen)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(42.dp).clip(CircleShape).background(accent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                PhIcons.Regular.NavigationArrow,
-                contentDescription = null,
-                tint = if (accent.luminance() > 0.42f) Color.Black else Color.White,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                navigation.instruction,
-                color = primary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                navigation.eta.ifBlank { "Waze navigation active" },
-                color = secondary,
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Text(
-            navigation.distance,
-            color = primary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
     }
 }
 

@@ -28,7 +28,6 @@ import com.openlauncher.app.ui.components.Sidebar
 import com.openlauncher.app.ui.screen.*
 import com.openlauncher.app.ui.theme.OpenLauncherTheme
 import com.openlauncher.app.viewmodel.LauncherViewModel
-import com.openlauncher.app.service.WazeNavigationFeed
 
 class MainActivity : ComponentActivity() {
 
@@ -77,7 +76,6 @@ class MainActivity : ComponentActivity() {
             val gpsLocationName by vm.gpsLocationName.collectAsStateWithLifecycle()
             val bearing     by vm.compassBearing.collectAsStateWithLifecycle()
             val vehicleData by vm.vehicleData.collectAsStateWithLifecycle()
-            val wazeNavigation by WazeNavigationFeed.state.collectAsStateWithLifecycle()
             val bluetoothDriverDevices by vm.bluetoothDriverDevices.collectAsStateWithLifecycle()
             val activeProfilePhoto by vm.activeProfilePhoto.collectAsStateWithLifecycle()
             val isWifi      by vm.isWifi.collectAsStateWithLifecycle()
@@ -226,7 +224,6 @@ class MainActivity : ComponentActivity() {
                                         gpsLocationName = gpsLocationName,
                                         bearing = bearing,
                                         vehicleData = vehicleData,
-                                        wazeNavigation = wazeNavigation,
                                         profilePhoto = activeProfilePhoto,
                                         isDayMode = isDayMode,
                                         onPlayPause = vm::playPause,
@@ -235,8 +232,7 @@ class MainActivity : ComponentActivity() {
                                         onSeek = vm::seekTo,
                                         onTapNowPlaying = {
                                             vm.launchApp("com.google.android.apps.youtube.music")
-                                        },
-                                        onOpenWaze = { vm.launchApp(WazeNavigationFeed.WAZE_PACKAGE) }
+                                        }
                                     )
 
                                     NavDestination.APP_LIBRARY -> AppLibraryScreen(
