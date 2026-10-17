@@ -4,6 +4,9 @@ plugins {
 }
 
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+val taggedReleaseVersion = providers.environmentVariable("GITHUB_REF_NAME").orNull
+    ?.removePrefix("v")
+    ?.takeIf { it.matches(Regex("\\d+\\.\\d+\\.\\d+")) }
 
 android {
     namespace  = "com.openlauncher.app"
@@ -15,8 +18,10 @@ android {
         applicationId  = "com.openlauncher.app"
         minSdk         = 21
         targetSdk      = 36
-        versionCode    = 27
-        versionName    = "0.0.26"
+        versionCode    = 28
+        // GitHub Actions builds tagged releases with the tag's version, preventing
+        // an APK tagged vX from advertising the previous version to the updater.
+        versionName    = taggedReleaseVersion ?: "0.0.28"
     }
 
     signingConfigs {
