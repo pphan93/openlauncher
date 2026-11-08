@@ -1,8 +1,11 @@
 package com.openlauncher.app.viewmodel
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import android.database.ContentObserver
 import android.location.Geocoder
 import android.net.ConnectivityManager
@@ -709,8 +712,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // Reload the app list whenever a package is installed, removed or updated.
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = loadInstalledApps()
+    }
+
     override fun onCleared() {
         super.onCleared()
+        getApplication<Application>().unregisterReceiver(packageReceiver)
         locationMgr.stop()
         bluetoothDriverMgr.stop()
         vehicleDataMgr.stop()
@@ -725,6 +734,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 .distinctUntilChanged()
                 .collect(::loadInstalledApps)
         }
+        ContextCompat.registerReceiver(
+            getApplication(),
+            packageReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addAction(Intent.ACTION_PACKAGE_CHANGED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addDataScheme("package")
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         refreshConnectivity()
         bluetoothDriverMgr.start()
         vehicleDataMgr.start()

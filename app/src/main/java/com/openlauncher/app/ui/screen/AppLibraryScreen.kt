@@ -63,7 +63,7 @@ fun AppLibraryScreen(
 
     val filtered = remember(apps, query, appTab) {
         apps.asSequence()
-            .filter { appTab == AppTab.ALL || !it.isSystemApp }
+            .filter { appTab == AppTab.ALL || it.isLaunchable || !it.isSystemApp }
             .filter { query.isBlank() || it.appName.contains(query, ignoreCase = true) }
             .toList()
     }

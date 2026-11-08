@@ -18,10 +18,10 @@ android {
         applicationId  = "com.openlauncher.app"
         minSdk         = 21
         targetSdk      = 36
-        versionCode    = 30
+        versionCode    = 31
         // GitHub Actions builds tagged releases with the tag's version, preventing
         // an APK tagged vX from advertising the previous version to the updater.
-        versionName    = taggedReleaseVersion ?: "0.0.30"
+        versionName    = taggedReleaseVersion ?: "0.0.31"
     }
 
     signingConfigs {
