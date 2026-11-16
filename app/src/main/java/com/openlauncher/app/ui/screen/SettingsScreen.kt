@@ -12,6 +12,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -934,8 +938,26 @@ fun SettingsScreen(
 
             SettingsDivider()
 
+            var draggingIndex by remember { mutableIntStateOf(-1) }
+            var dragOffsetPx  by remember { mutableFloatStateOf(0f) }
+            var rowStepPx     by remember { mutableIntStateOf(1) }
+            val lastIndex = settings.shortcuts.lastIndex
+            fun dragTarget() = (draggingIndex + (dragOffsetPx / rowStepPx).roundToInt()).coerceIn(0, lastIndex)
+
             settings.shortcuts.forEachIndexed { index, shortcut ->
-                if (index > 0) SettingsDivider()
+              val target = if (draggingIndex >= 0) dragTarget() else -1
+              val shift = when {
+                  draggingIndex < 0 || index == draggingIndex -> 0f
+                  draggingIndex < target && index in (draggingIndex + 1)..target -> -rowStepPx.toFloat()
+                  draggingIndex > target && index in target until draggingIndex  ->  rowStepPx.toFloat()
+                  else -> 0f
+              }
+              Column(
+                  Modifier
+                      .then(if (index == 0) Modifier.onSizeChanged { rowStepPx = it.height.coerceAtLeast(1) } else Modifier)
+                      .zIndex(if (index == draggingIndex) 1f else 0f)
+                      .graphicsLayer { translationY = if (index == draggingIndex) dragOffsetPx else shift }
+              ) {
                 SettingsRow(
                     label    = "Slot ${index + 1}",
                     sublabel = when {
@@ -946,6 +968,28 @@ fun SettingsScreen(
                     icon     = Icons.Default.Apps
                 ) {
                     if (settings.shortcuts.size > 1) {
+                        Icon(
+                            Icons.Default.DragHandle, "Drag to reorder",
+                            tint = accent,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .padding(6.dp)
+                                .pointerInput(index, lastIndex) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = { draggingIndex = index; dragOffsetPx = 0f },
+                                        onVerticalDrag = { change, d -> change.consume(); dragOffsetPx += d },
+                                        onDragEnd = {
+                                            val from = draggingIndex
+                                            val to = dragTarget()
+                                            if (from >= 0 && to != from) onUpdate {
+                                                copy(shortcuts = shortcuts.toMutableList().also { it.add(to, it.removeAt(from)) })
+                                            }
+                                            draggingIndex = -1; dragOffsetPx = 0f
+                                        },
+                                        onDragCancel = { draggingIndex = -1; dragOffsetPx = 0f }
+                                    )
+                                }
+                        )
                         IconButton(
                             onClick  = {
                                 onUpdate {
@@ -958,6 +1002,8 @@ fun SettingsScreen(
                         }
                     }
                 }
+                if (index < lastIndex) SettingsDivider()
+              }
             }
 
             SettingsDivider()
